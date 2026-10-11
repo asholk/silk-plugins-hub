@@ -16,7 +16,7 @@ Your administrator decides which plugins each company can use. You sign in, conn
 ## Requirements
 
 > [!important] An account is required
-> The plugin works only with a Silk Plugins Hub server run by your company. You need an account on that server that your administrator has added to a company. Without a server and an account, the plugin has nothing to show.
+> The plugin works only with a [Silk Plugins Hub server](https://github.com/asholk/silk-plugins-hub-server) run by your company. You need an account on that server that your administrator has added to a company. Without a server and an account, the plugin has nothing to show.
 
 - Obsidian 1.11.4 or later.
 
@@ -33,6 +33,10 @@ To test beta versions before they reach the directory, install the plugin with [
 3. Select **Sign in with Google** and finish signing in in your browser.
 4. Enter your company code and select **Connect**. Repeat for every company you work with.
 5. Select **Install** next to the plugins you need.
+
+## Run your own server
+
+The server is open source: [asholk/silk-plugins-hub-server](https://github.com/asholk/silk-plugins-hub-server). It runs locally with Node.js or in Yandex Cloud as a serverless function, and plugin repositories publish releases to it from CI. Administrators manage companies, users and plugins with the Silk Plugins Hub Admin plugin.
 
 ## Network use and privacy
 
