@@ -15,11 +15,11 @@ export class ChangesModal extends Modal {
 
   onOpen(): void {
     this.setTitle(t("changesTitle", { name: this.pluginName, version: this.release.version }));
-    this.modalEl.addClass("corp-hub-changes-modal");
+    this.modalEl.addClass("silk-hub-changes-modal");
     const { contentEl } = this;
-    contentEl.createDiv({ cls: "corp-hub-muted", text: formatDate(this.release.publishedAt) });
+    contentEl.createDiv({ cls: "silk-hub-muted", text: formatDate(this.release.publishedAt) });
     if (this.release.changes.length === 0) {
-      contentEl.createEl("p", { cls: "corp-hub-muted", text: t("changelogEmpty") });
+      contentEl.createEl("p", { cls: "silk-hub-muted", text: t("changelogEmpty") });
       return;
     }
     renderChangesTable(contentEl, this.release.changes);

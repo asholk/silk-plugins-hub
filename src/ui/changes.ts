@@ -15,11 +15,11 @@ export function formatDate(iso: string): string {
 }
 
 export function renderChanges(parent: HTMLElement, changes: ChangeItem[]): void {
-  const list = parent.createEl("ul", { cls: "corp-hub-changes" });
+  const list = parent.createEl("ul", { cls: "silk-hub-changes" });
   for (const change of changes) {
     const type = CHANGE_TYPES[change.type] ?? CHANGE_TYPES.other;
-    const li = list.createEl("li", { cls: `corp-hub-change corp-hub-change-${change.type}` });
-    const icon = li.createSpan({ cls: "corp-hub-change-icon", attr: { "aria-label": t(type.label) } });
+    const li = list.createEl("li", { cls: `silk-hub-change silk-hub-change-${change.type}` });
+    const icon = li.createSpan({ cls: "silk-hub-change-icon", attr: { "aria-label": t(type.label) } });
     setIcon(icon, type.icon);
     li.createSpan({ text: change.text });
   }
@@ -27,26 +27,26 @@ export function renderChanges(parent: HTMLElement, changes: ChangeItem[]): void 
 
 /** Changes as a table: type, what changed, why. */
 export function renderChangesTable(parent: HTMLElement, changes: ChangeItem[]): void {
-  const table = parent.createEl("table", { cls: "corp-hub-changes-table" });
+  const table = parent.createEl("table", { cls: "silk-hub-changes-table" });
   const head = table.createEl("thead").createEl("tr");
   for (const key of ["colType", "colWhat", "colWhy"] as const) head.createEl("th", { text: t(key) });
   const body = table.createEl("tbody");
   for (const change of changes) {
     const type = CHANGE_TYPES[change.type] ?? CHANGE_TYPES.other;
-    const row = body.createEl("tr", { cls: `corp-hub-change-${change.type}` });
-    const typeCell = row.createEl("td", { cls: "corp-hub-change-type" });
-    setIcon(typeCell.createSpan({ cls: "corp-hub-change-icon" }), type.icon);
+    const row = body.createEl("tr", { cls: `silk-hub-change-${change.type}` });
+    const typeCell = row.createEl("td", { cls: "silk-hub-change-type" });
+    setIcon(typeCell.createSpan({ cls: "silk-hub-change-icon" }), type.icon);
     typeCell.createSpan({ text: t(type.label) });
     row.createEl("td", { text: change.text });
-    row.createEl("td", { cls: change.why ? "" : "corp-hub-muted", text: change.why || "—" });
+    row.createEl("td", { cls: change.why ? "" : "silk-hub-muted", text: change.why || "—" });
   }
 }
 
 export function renderRelease(parent: HTMLElement, release: ReleaseInfo): void {
-  const el = parent.createDiv({ cls: "corp-hub-release" });
-  const head = el.createDiv({ cls: "corp-hub-release-head" });
-  head.createSpan({ cls: "corp-hub-version", text: release.version });
-  head.createSpan({ cls: "corp-hub-muted", text: formatDate(release.publishedAt) });
+  const el = parent.createDiv({ cls: "silk-hub-release" });
+  const head = el.createDiv({ cls: "silk-hub-release-head" });
+  head.createSpan({ cls: "silk-hub-version", text: release.version });
+  head.createSpan({ cls: "silk-hub-muted", text: formatDate(release.publishedAt) });
   if (release.changes.length > 0) renderChanges(el, release.changes);
 }
 

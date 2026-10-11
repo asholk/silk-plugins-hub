@@ -1,7 +1,7 @@
-import { App, Notice, PluginSettingTab, Setting, SettingGroup } from "obsidian";
+import { App, ButtonComponent, Notice, PluginSettingTab, Setting, SettingGroup, TextComponent } from "obsidian";
 import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
-import type CorporatePluginHub from "../main";
+import type SilkPluginsHub from "../main";
 import type { CatalogPlugin, Company } from "../settings";
 import { PluginRow } from "./PluginRow";
 
@@ -18,7 +18,7 @@ export class HubSettingTab extends PluginSettingTab {
 
   constructor(
     app: App,
-    private plugin: CorporatePluginHub,
+    private plugin: SilkPluginsHub,
   ) {
     super(app, plugin);
   }
@@ -35,7 +35,7 @@ export class HubSettingTab extends PluginSettingTab {
     const { plugin } = this;
     const rows: { row: PluginRow; name: string }[] = [];
     const group = new SettingGroup(el).setHeading(t("plugins"));
-    group.addClass("corp-hub-plugins");
+    group.addClass("silk-hub-plugins");
     if (catalog.length > 1) {
       group.addSearch((search) =>
         search.setPlaceholder(t("searchPlugins")).onChange((value) => {
@@ -65,8 +65,55 @@ export class HubSettingTab extends PluginSettingTab {
     }
   }
 
+  /** The company is entered as text: its code from the administrator (or its name). */
+  private renderCompany(containerEl: HTMLElement, companies: Company[]): void {
+    const { plugin } = this;
+    const { settings, client } = plugin;
+    const current = companies.find((c) => c.id === settings.companyId) ?? null;
+    const setting = new Setting(containerEl).setName(t("company"));
+    const showDesc = (text: string, error = false) => {
+      setting.descEl.setText(text);
+      setting.descEl.toggleClass("silk-hub-error", error);
+    };
+    showDesc(current ? t("companyConnected", { name: current.name }) : t("companyCodeDesc"));
+
+    let input: TextComponent;
+    let button: ButtonComponent;
+    const connect = async () => {
+      const code = input.getValue().trim();
+      if (!code) return showDesc(t("companyCodeDesc"), true);
+      button.setDisabled(true);
+      try {
+        const company = await client.lookupCompany(code);
+        if (!company) return showDesc(t("companyNotFound", { code, email: settings.accountEmail ?? "" }), true);
+        if (company.id === settings.companyId) return showDesc(t("companyConnected", { name: company.name }));
+        settings.companyId = company.id;
+        settings.selected = [];
+        await plugin.saveSettings();
+        void this.render();
+      } catch (err) {
+        showDesc(t("loadFailed", { error: (err as Error).message }), true);
+      } finally {
+        button.setDisabled(false);
+      }
+    };
+    setting
+      .addText((text) => {
+        input = text;
+        text.setPlaceholder(t("companyCodePlaceholder")).setValue(current?.slug ?? "");
+        text.inputEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") void connect();
+        });
+      })
+      .addButton((b) => {
+        button = b;
+        b.setButtonText(t("connect")).onClick(() => void connect());
+        if (!current) b.setCta();
+      });
+  }
+
   private renderGuide(containerEl: HTMLElement, open: boolean): void {
-    const details = containerEl.createEl("details", { cls: "corp-hub-guide" });
+    const details = containerEl.createEl("details", { cls: "silk-hub-guide" });
     details.open = open;
     details.createEl("summary", { text: t("guideTitle") });
     const list = details.createEl("ol");
@@ -145,29 +192,17 @@ export class HubSettingTab extends PluginSettingTab {
     } catch (err) {
       if (renderId !== this.renderId) return;
       if (err instanceof NotSignedInError) return void this.render();
-      containerEl.createEl("p", { cls: "corp-hub-error", text: t("loadFailed", { error: (err as Error).message }) });
+      containerEl.createEl("p", { cls: "silk-hub-error", text: t("loadFailed", { error: (err as Error).message }) });
       return;
     }
     if (renderId !== this.renderId) return;
 
     if (companies.length === 0) {
-      containerEl.createEl("p", { cls: "corp-hub-muted", text: t("noCompanies", { email: settings.accountEmail ?? "" }) });
+      containerEl.createEl("p", { cls: "silk-hub-muted", text: t("noCompanies", { email: settings.accountEmail ?? "" }) });
       return;
     }
 
-    new Setting(containerEl)
-      .setName(t("company"))
-      .setDesc(t("companyDesc"))
-      .addDropdown((dropdown) => {
-        if (settings.companyId === null) dropdown.addOption("", t("chooseCompany"));
-        companies.forEach((c) => dropdown.addOption(String(c.id), c.name));
-        dropdown.setValue(settings.companyId === null ? "" : String(settings.companyId)).onChange(async (value) => {
-          settings.companyId = value ? Number(value) : null;
-          settings.selected = [];
-          await plugin.saveSettings();
-          void this.render();
-        });
-      });
+    this.renderCompany(containerEl, companies);
 
     if (settings.companyId === null) return;
 

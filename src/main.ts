@@ -11,7 +11,7 @@ import { UpdateService } from "./updates/UpdateService";
 const SIGN_IN_TTL_MS = 10 * 60 * 1000;
 const STARTUP_DELAY_MS = 10 * 1000;
 
-export default class CorporatePluginHub extends Plugin {
+export default class SilkPluginsHub extends Plugin {
   settings!: HubSettings;
   client!: HubClient;
   installer!: Installer;
@@ -30,10 +30,10 @@ export default class CorporatePluginHub extends Plugin {
     this.settingTab = new HubSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
     this.registerView(CHANGELOG_VIEW, (leaf) => new ChangelogView(leaf, this));
-    this.registerObsidianProtocolHandler("corp-hub-auth", (params) => void this.finishSignIn(params.code, params.state));
+    this.registerObsidianProtocolHandler("silk-hub-auth", (params) => void this.finishSignIn(params.code, params.state));
 
     this.statusBarEl = this.addStatusBarItem();
-    this.statusBarEl.addClass("corp-hub-status", "mod-clickable");
+    this.statusBarEl.addClass("silk-hub-status", "mod-clickable");
     this.statusBarEl.addEventListener("click", () => this.updates.openModal());
     this.updateStatusBar(0);
 
@@ -137,7 +137,7 @@ export default class CorporatePluginHub extends Plugin {
 
 class RollbackModal extends SuggestModal<string> {
   constructor(
-    private plugin: CorporatePluginHub,
+    private plugin: SilkPluginsHub,
     private ids: string[],
   ) {
     super(plugin.app);

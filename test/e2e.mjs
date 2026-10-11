@@ -87,16 +87,16 @@ try {
   const start = await fetch(opened[0], { redirect: "manual" });
   const state = new URL(start.headers.get("location"), base).searchParams.get("state");
   const page = await (await fetch(`${base}/auth/dev`, { method: "POST", body: new URLSearchParams({ state, email: "user@example.com" }) })).text();
-  const link = page.match(/href="(obsidian:\/\/corp-hub-auth\?[^"]+)"/)[1].replace(/&amp;/g, "&");
+  const link = page.match(/href="(obsidian:\/\/silk-hub-auth\?[^"]+)"/)[1].replace(/&amp;/g, "&");
   const params = Object.fromEntries(new URL(link).searchParams);
   ok(`браузер вернул ссылку ${link.slice(0, 40)}…`);
 
   step("Пользователь не привязан к компании");
   const noticesBefore = log.notices.length;
-  hub.protocolHandlers["corp-hub-auth"](params);
+  hub.protocolHandlers["silk-hub-auth"](params);
   for (let i = 0; i < 100 && log.notices.length === noticesBefore; i++) await new Promise((r) => setTimeout(r, 50));
   assert.equal(hub.settings.accountEmail, "user@example.com");
-  assert.ok(app.secretStorage.getSecret("corporate-plugin-hub-session"), "refresh-токен в SecretStorage");
+  assert.ok(app.secretStorage.getSecret("silk-plugins-hub-session"), "refresh-токен в SecretStorage");
   assert.ok(!JSON.stringify(hub.data).includes("Token"), "токены не попали в data.json");
   assert.equal(hub.settings.companyId, null);
   ok(`вход выполнен: ${lastNotice()}`);
@@ -231,7 +231,7 @@ try {
 
   step("Выход");
   await hub.signOut();
-  assert.equal(app.secretStorage.getSecret("corporate-plugin-hub-session"), null);
+  assert.equal(app.secretStorage.getSecret("silk-plugins-hub-session"), null);
   ok("токен удалён");
 
   console.log("\nВсе проверки пройдены.");

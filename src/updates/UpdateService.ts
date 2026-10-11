@@ -2,7 +2,7 @@ import { Notice } from "obsidian";
 import { uninstallPlugin } from "../install/communityPlugins";
 import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
-import type CorporatePluginHub from "../main";
+import type SilkPluginsHub from "../main";
 import type { PluginUpdate } from "../settings";
 import { UpdatesModal } from "../ui/UpdatesModal";
 
@@ -12,7 +12,7 @@ export class UpdateService {
   /** Updates found by the last check that are still waiting for the user. */
   pending: PluginUpdate[] = [];
 
-  constructor(private plugin: CorporatePluginHub) {}
+  constructor(private plugin: SilkPluginsHub) {}
 
   /**
    * @param interactive true when the user asked for the check: always report the result and show the dialog.
@@ -67,7 +67,7 @@ export class UpdateService {
         if (interactive) this.plugin.openSettings();
         return;
       }
-      console.error("Corporate Plugin Hub: update check failed", err);
+      console.error("Silk Plugins Hub: update check failed", err);
       if (interactive) new Notice(t("loadFailed", { error: (err as Error).message }));
     } finally {
       this.running = false;
@@ -84,7 +84,7 @@ export class UpdateService {
         applied.push(update);
         delete this.plugin.settings.skipped[update.id];
       } catch (err) {
-        console.error(`Corporate Plugin Hub: failed to install ${update.id}`, err);
+        console.error(`Silk Plugins Hub: failed to install ${update.id}`, err);
         new Notice(t("installFailed", { name: update.name, error: (err as Error).message }), 10000);
       } finally {
         progress.hide();
@@ -150,14 +150,14 @@ export class UpdateService {
 
   private notifyAvailable(): void {
     const notice = new Notice(t("updatesAvailable", { n: this.pending.length }), 15000);
-    notice.messageEl.addClass("corp-hub-clickable");
+    notice.messageEl.addClass("silk-hub-clickable");
     notice.messageEl.addEventListener("click", () => this.openModal());
   }
 
   private notifyApplied(applied: PluginUpdate[]): void {
     const list = applied.map((u) => `${u.name} ${u.version}`).join(", ");
     const notice = new Notice(t("updatedNotice", { list }), 15000);
-    notice.messageEl.addClass("corp-hub-clickable");
+    notice.messageEl.addClass("silk-hub-clickable");
     notice.messageEl.addEventListener("click", () => void this.plugin.openChangelog());
   }
 }

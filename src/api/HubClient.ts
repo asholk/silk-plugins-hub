@@ -1,7 +1,7 @@
 import { apiVersion, App, requestUrl, RequestUrlResponse } from "obsidian";
 import type { CatalogPlugin, CheckResult, Company, ReleaseInfo } from "../settings";
 
-const REFRESH_SECRET = "corporate-plugin-hub-session";
+const REFRESH_SECRET = "silk-plugins-hub-session";
 
 export class HubError extends Error {
   constructor(message: string, readonly status = 0) {
@@ -21,7 +21,7 @@ interface TokenResponse {
   expiresIn: number;
 }
 
-/** Talks to the Plugin Hub server. The refresh token lives in Obsidian's SecretStorage, the access token only in memory. */
+/** Talks to the Silk Plugins Hub server. The refresh token lives in Obsidian's SecretStorage, the access token only in memory. */
 export class HubClient {
   private accessToken: string | null = null;
   private accessExpiresAt = 0;
@@ -60,6 +60,17 @@ export class HubClient {
 
   me(): Promise<{ user: { email: string; name: string }; companies: Company[] }> {
     return this.call("/api/me");
+  }
+
+  /** Company by its code or name among the user's companies; null if there is no such company or no access. */
+  async lookupCompany(code: string): Promise<Company | null> {
+    try {
+      const res = await this.call<{ company: Company }>(`/api/companies/lookup?code=${encodeURIComponent(code)}`);
+      return res.company;
+    } catch (err) {
+      if (err instanceof HubError && err.status === 404) return null;
+      throw err;
+    }
   }
 
   async catalog(companyId: number): Promise<CatalogPlugin[]> {

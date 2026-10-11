@@ -1,7 +1,7 @@
 import { ButtonComponent, Setting } from "obsidian";
 import { t } from "../i18n";
 import { isPluginEnabled, setPluginEnabled } from "../install/communityPlugins";
-import type CorporatePluginHub from "../main";
+import type SilkPluginsHub from "../main";
 import type { CatalogPlugin } from "../settings";
 import { compareVersions } from "./changes";
 import { GuideModal } from "./GuideModal";
@@ -18,13 +18,13 @@ export class PluginRow {
   private busyText: string | null = null;
 
   constructor(
-    private plugin: CorporatePluginHub,
+    private plugin: SilkPluginsHub,
     private setting: Setting,
     private p: CatalogPlugin,
     installed: string | null,
   ) {
     this.installed = installed;
-    setting.settingEl.addClass("corp-hub-plugin-row");
+    setting.settingEl.addClass("silk-hub-plugin-row");
     setting.setName(p.name);
     this.render();
   }
@@ -46,15 +46,15 @@ export class PluginRow {
     const { descEl } = this.setting;
     descEl.empty();
     if (this.p.description) descEl.createDiv({ text: this.p.description });
-    if (this.p.instructions) descEl.createDiv({ cls: "corp-hub-instructions", text: t("howToStart", { text: this.p.instructions }) });
-    const meta = descEl.createDiv({ cls: "corp-hub-plugin-meta" });
+    if (this.p.instructions) descEl.createDiv({ cls: "silk-hub-instructions", text: t("howToStart", { text: this.p.instructions }) });
+    const meta = descEl.createDiv({ cls: "silk-hub-plugin-meta" });
     meta.createSpan({
-      cls: this.installed ? "corp-hub-chip mod-installed" : "corp-hub-chip",
+      cls: this.installed ? "silk-hub-chip mod-installed" : "silk-hub-chip",
       text: this.installed ? t("installed", { version: this.installed }) : t("notInstalled"),
     });
-    if (this.latest && this.installed !== this.latest) meta.createSpan({ cls: "corp-hub-chip", text: t("latest", { version: this.latest }) });
-    if (!this.latest) meta.createSpan({ cls: "corp-hub-chip", text: t("notReleased") });
-    if (this.p.required) meta.createSpan({ cls: "corp-hub-chip mod-required", text: t("required") });
+    if (this.latest && this.installed !== this.latest) meta.createSpan({ cls: "silk-hub-chip", text: t("latest", { version: this.latest }) });
+    if (!this.latest) meta.createSpan({ cls: "silk-hub-chip", text: t("notReleased") });
+    if (this.p.required) meta.createSpan({ cls: "silk-hub-chip mod-required", text: t("required") });
   }
 
   private renderControls(): void {

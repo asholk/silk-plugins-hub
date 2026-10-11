@@ -19,7 +19,7 @@ export class UpdatesModal extends Modal {
 
   onOpen(): void {
     this.setTitle(t("modalTitle"));
-    this.modalEl.addClass("corp-hub-updates-modal");
+    this.modalEl.addClass("silk-hub-updates-modal");
     this.render();
   }
 
@@ -32,7 +32,7 @@ export class UpdatesModal extends Modal {
     contentEl.empty();
 
     for (const update of this.updates) {
-      const card = contentEl.createDiv({ cls: "corp-hub-update" });
+      const card = contentEl.createDiv({ cls: "silk-hub-update" });
       const reason =
         update.reason === "install"
           ? t("reasonInstall")
@@ -65,9 +65,9 @@ export class UpdatesModal extends Modal {
         );
 
       if (update.reason === "install" && update.instructions) {
-        card.createDiv({ cls: "corp-hub-instructions", text: t("howToStart", { text: update.instructions }) });
+        card.createDiv({ cls: "silk-hub-instructions", text: t("howToStart", { text: update.instructions }) });
       }
-      const log = card.createDiv({ cls: "corp-hub-update-log" });
+      const log = card.createDiv({ cls: "silk-hub-update-log" });
       update.changelog.forEach((release) => renderRelease(log, release));
     }
 

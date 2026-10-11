@@ -1,9 +1,9 @@
 {
-  "id": "corporate-plugin-hub",
-  "name": "Corporate Plugin Hub",
+  "id": "silk-plugins-hub",
+  "name": "Silk Plugins Hub",
   "version": "0.1.0",
   "minAppVersion": "1.11.4",
-  "description": "Install and update your company's private plugins from a Plugin Hub server, with a changelog for every release.",
+  "description": "Install and update your company's private plugins from a Silk Plugins Hub server, with a changelog for every release.",
   "author": "Alexander Shelkovov",
   "isDesktopOnly": false
 }

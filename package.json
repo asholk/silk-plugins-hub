@@ -1,7 +1,7 @@
 {
-  "name": "corporate-plugin-hub",
+  "name": "silk-plugins-hub",
   "version": "0.1.0",
-  "description": "Obsidian plugin: install and update company plugins from a Plugin Hub server",
+  "description": "Obsidian plugin: install and update company plugins from a Silk Plugins Hub server",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
