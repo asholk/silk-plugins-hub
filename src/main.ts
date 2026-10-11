@@ -96,6 +96,7 @@ export default class SilkPluginsHub extends Plugin {
       if (me.companies.length === 1 && this.settings.companyIds.length === 0) this.settings.companyIds = [me.companies[0].id];
       await this.saveSettings();
       new Notice(t("signInDone", { email: me.user.email }));
+      this.settingTab.refresh();
       this.openSettings();
     } catch (err) {
       new Notice(t("signInFailed", { error: (err as Error).message }));
@@ -112,6 +113,7 @@ export default class SilkPluginsHub extends Plugin {
     void this.saveSettings();
     this.updates.pending = [];
     this.updateStatusBar(0);
+    this.settingTab.refresh();
   }
 
   openSettings(): void {

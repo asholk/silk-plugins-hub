@@ -98,6 +98,7 @@ const en = {
   openGuide: "Open instructions",
   contents: "Contents",
   searchPlugins: "Search plugins",
+  loading: "Loading…",
 };
 
 const ru: typeof en = {
@@ -198,6 +199,7 @@ const ru: typeof en = {
   openGuide: "Открыть инструкцию",
   contents: "Содержание",
   searchPlugins: "Поиск плагинов",
+  loading: "Загрузка…",
 };
 
 export type MessageKey = keyof typeof en;

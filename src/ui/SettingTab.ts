@@ -1,8 +1,8 @@
-import { App, ButtonComponent, Notice, PluginSettingTab, Setting, SettingGroup, TextComponent } from "obsidian";
+import { App, ButtonComponent, Notice, PluginSettingTab, Setting, SettingDefinition, SettingDefinitionItem, TextComponent } from "obsidian";
 import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
 import type SilkPluginsHub from "../main";
-import type { CatalogPlugin, Company } from "../settings";
+import type { CatalogPlugin, Company, HubSettings } from "../settings";
 import { PluginRow } from "./PluginRow";
 
 /** Renders "text with **bold**" without innerHTML. */
@@ -13,8 +13,23 @@ function appendWithBold(parent: HTMLElement, text: string): void {
   });
 }
 
+/** What the tab shows below the account: loaded from the server each time the tab opens. */
+type HubData =
+  | { state: "loading" }
+  | { state: "error"; message: string }
+  | { state: "ready"; companies: Company[]; catalog: CatalogPlugin[]; installed: Record<string, string> };
+
+const CHECK_INTERVALS = [0, 1, 3, 6, 12, 24];
+
+/**
+ * Settings declared with getSettingDefinitions(), so they appear in Obsidian's settings search.
+ * Server data (companies, catalog) is loaded when the tab opens; the definitions are rebuilt with
+ * update() once it arrives.
+ */
 export class HubSettingTab extends PluginSettingTab {
-  private renderId = 0;
+  private data: HubData = { state: "loading" };
+  private stale = true;
+  private loadId = 0;
 
   constructor(
     app: App,
@@ -23,80 +38,197 @@ export class HubSettingTab extends PluginSettingTab {
     super(app, plugin);
   }
 
-  display(): void {
-    void this.render();
+  /** Reloads server data and redraws the tab, for example after signing in elsewhere. */
+  refresh(): void {
+    this.stale = true;
+    this.update();
   }
 
-  /**
-   * Company plugins as a group with search, like BRAT. Each row updates itself after an action,
-   * so installing or switching a plugin doesn't redraw the page.
-   */
-  private async renderPlugins(el: HTMLElement, offered: CatalogPlugin[], companies: Company[]): Promise<void> {
+  hide(): void {
+    // Next time the tab opens, its data is loaded again.
+    this.stale = true;
+    super.hide();
+  }
+
+  getControlValue(key: string): unknown {
+    return this.plugin.settings[key as keyof HubSettings];
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    const { settings } = this.plugin;
+    if (key === "serverUrl") settings.serverUrl = String(value).trim();
+    else if (key === "autoUpdate") settings.autoUpdate = Boolean(value);
+    else if (key === "checkIntervalHours") settings.checkIntervalHours = Number(value);
+    await this.plugin.saveSettings();
+    if (key === "checkIntervalHours") this.plugin.scheduleChecks();
+  }
+
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    const { settings, client } = this.plugin;
+    if (this.stale && client.signedIn) void this.load();
+
+    const items: SettingDefinitionItem[] = [
+      {
+        name: t("guideTitle"),
+        aliases: [t("signIn"), t("connect")],
+        render: (setting) => this.renderGuide(setting, !client.signedIn || settings.companyIds.length === 0),
+      },
+      {
+        name: t("serverUrl"),
+        desc: t("serverUrlDesc"),
+        control: { type: "text", key: "serverUrl", placeholder: "https://hub.example.com" },
+      },
+      { type: "group", heading: t("account"), items: [this.accountItem()] },
+    ];
+    if (!client.signedIn) return items;
+
+    const { data } = this;
+    if (data.state !== "ready") {
+      const message = data.state === "loading" ? t("loading") : t("loadFailed", { error: data.message });
+      items.push({ name: message, searchable: false });
+      return items;
+    }
+    if (data.companies.length === 0) {
+      items.push({ name: t("noCompanies", { email: settings.accountEmail ?? "" }), searchable: false });
+      return items;
+    }
+
+    items.push({ type: "group", heading: t("companies"), items: this.companyItems(data.companies) });
+    if (settings.companyIds.length === 0) return items;
+
+    items.push(this.pluginsGroup(data.catalog, data.companies, data.installed));
+    items.push({
+      type: "group",
+      heading: t("updates"),
+      items: [
+        { name: t("autoUpdate"), desc: t("autoUpdateDesc"), control: { type: "toggle", key: "autoUpdate" } },
+        {
+          name: t("checkInterval"),
+          desc: t("checkIntervalDesc"),
+          control: {
+            type: "dropdown",
+            key: "checkIntervalHours",
+            options: Object.fromEntries(CHECK_INTERVALS.map((n) => [String(n), n === 0 ? t("never") : t("hours", { n })])),
+          },
+        },
+        {
+          name: t("checkNow"),
+          aliases: [t("openChangelog")],
+          render: (s) => {
+            s.setName("")
+              .addButton((b) => b.setButtonText(t("openChangelog")).onClick(() => void this.plugin.openChangelog()))
+              .addButton((b) => b.setButtonText(t("checkNow")).onClick(() => void this.plugin.updates.check(true)));
+          },
+        },
+      ],
+    });
+    return items;
+  }
+
+  /** Loads the user's companies, the catalog of the connected ones and installed versions, then redraws. */
+  private async load(): Promise<void> {
+    const id = ++this.loadId;
+    this.stale = false;
+    const { settings, client, installer } = this.plugin;
+    let next: HubData;
+    try {
+      const me = await client.me();
+      if (settings.accountEmail !== me.user.email) {
+        settings.accountEmail = me.user.email;
+        await this.plugin.saveSettings();
+      }
+      // Drop companies the user was removed from.
+      const ids = settings.companyIds.filter((cid) => me.companies.some((c) => c.id === cid));
+      if (ids.length !== settings.companyIds.length) {
+        settings.companyIds = ids;
+        await this.plugin.saveSettings();
+      }
+      const catalog = (await client.catalog(settings.companyIds)).filter((p) => installer.manages(p.id));
+      const installed = await installer.installedVersions(catalog.map((p) => p.id));
+      next = { state: "ready", companies: me.companies, catalog, installed };
+    } catch (err) {
+      next = err instanceof NotSignedInError ? { state: "loading" } : { state: "error", message: (err as Error).message };
+    }
+    if (id !== this.loadId) return;
+    this.data = next;
+    this.update();
+  }
+
+  private renderGuide(setting: Setting, open: boolean): void {
+    setting.settingEl.addClass("silk-hub-guide-setting");
+    setting.infoEl.empty();
+    const details = setting.infoEl.createEl("details", { cls: "silk-hub-guide" });
+    details.open = open;
+    details.createEl("summary", { text: t("guideTitle") });
+    const list = details.createEl("ol");
+    for (const step of t("guideSteps").split("|")) appendWithBold(list.createEl("li"), step);
+  }
+
+  private accountItem(): SettingDefinition {
     const { plugin } = this;
-    const catalog = offered.filter((p) => plugin.installer.manages(p.id));
-    const rows: { row: PluginRow; name: string }[] = [];
-    const group = new SettingGroup(el).setHeading(t("plugins"));
-    group.addClass("silk-hub-plugins");
-    if (catalog.length > 1) {
-      group.addSearch((search) =>
-        search.setPlaceholder(t("searchPlugins")).onChange((value) => {
-          const q = value.toLowerCase().trim();
-          for (const { row, name } of rows) row.element.toggle(q === "" || name.includes(q));
-        }),
-      );
+    const { settings, client } = plugin;
+    if (!client.signedIn) {
+      return {
+        name: t("signIn"),
+        desc: t("signInDesc"),
+        render: (s) => {
+          s.addButton((b) =>
+            b
+              .setButtonText(t("signIn"))
+              .setCta()
+              .setDisabled(!settings.serverUrl)
+              .onClick(() => void plugin.startSignIn()),
+          );
+        },
+      };
     }
-    group.addExtraButton((b) =>
-      b
-        .setIcon("refresh-cw")
-        .setTooltip(t("refresh"))
-        .onClick(() => {
-          void plugin.client.catalog(plugin.settings.companyIds).then(async (fresh) => {
-            el.empty();
-            await this.renderPlugins(el, fresh, companies);
-          });
-        }),
-    );
-    if (catalog.length === 0) {
-      group.addSetting((setting) => {
-        setting.setDesc(t("noPlugins"));
-      });
-      return;
-    }
-    const installed = await plugin.installer.installedVersions(catalog.map((p) => p.id));
-    for (const p of catalog) {
-      // With several companies connected, each plugin says which of them offer it.
-      const companyNames =
-        plugin.settings.companyIds.length > 1 ? companies.filter((c) => p.companies.includes(c.id)).map((c) => c.name) : [];
-      group.addSetting((setting) =>
-        rows.push({ row: new PluginRow(plugin, setting, p, installed[p.id] ?? null, companyNames), name: p.name.toLowerCase() }),
-      );
-    }
+    return {
+      name: t("signedInAs", { email: settings.accountEmail ?? "" }),
+      aliases: [t("signOut")],
+      render: (s) => {
+        s.addButton((b) =>
+          b.setButtonText(t("signOut")).onClick(async () => {
+            await plugin.signOut();
+            this.data = { state: "loading" };
+            this.refresh();
+          }),
+        );
+      },
+    };
   }
 
   /**
    * Connected companies, each with Disconnect, and a field to add one more by its code (or name).
    * Plugin lists of all connected companies are merged.
    */
-  private renderCompanies(containerEl: HTMLElement, companies: Company[]): void {
+  private companyItems(companies: Company[]): SettingDefinition[] {
+    const { settings } = this.plugin;
+    const connected = companies.filter((c) => settings.companyIds.includes(c.id));
+    const items: SettingDefinition[] = connected.map((company) => ({
+      name: company.name,
+      desc: t("companyCode", { code: company.slug }),
+      aliases: [company.slug],
+      render: (s) => this.addDisconnect(s, company),
+    }));
+    items.push({
+      name: connected.length ? t("addCompany") : t("company"),
+      desc: t("companyCodeDesc"),
+      aliases: [t("connect"), t("companyCodePlaceholder")],
+      render: (s) => this.renderConnect(s, companies, connected.length),
+    });
+    return items;
+  }
+
+  private renderConnect(setting: Setting, companies: Company[], connectedCount: number): void {
     const { plugin } = this;
     const { settings, client } = plugin;
-    new Setting(containerEl).setName(t("companies")).setHeading();
-    const connected = companies.filter((c) => settings.companyIds.includes(c.id));
-    for (const company of connected) {
-      const setting = new Setting(containerEl).setName(company.name).setDesc(t("companyCode", { code: company.slug }));
-      this.addDisconnect(setting, company);
-    }
-
-    const setting = new Setting(containerEl).setName(connected.length ? t("addCompany") : t("company"));
-    const showDesc = (text: string, error = false) => {
+    const showDesc = (text: string, error = false): void => {
       setting.descEl.setText(text);
       setting.descEl.toggleClass("silk-hub-error", error);
     };
-    showDesc(t("companyCodeDesc"));
-
     let input!: TextComponent;
     let button!: ButtonComponent;
-    const connect = async () => {
+    const connect = async (): Promise<void> => {
       const code = input.getValue().trim();
       if (!code) return showDesc(t("companyCodeDesc"), true);
       button.setDisabled(true);
@@ -107,7 +239,7 @@ export class HubSettingTab extends PluginSettingTab {
         settings.companyIds = [...settings.companyIds, company.id];
         await plugin.saveSettings();
         new Notice(t("companyAdded", { name: company.name }));
-        void this.render();
+        this.refresh();
       } catch (err) {
         showDesc(t("loadFailed", { error: (err as Error).message }), true);
       } finally {
@@ -115,7 +247,7 @@ export class HubSettingTab extends PluginSettingTab {
       }
     };
     // With a single company the code is suggested, but the user connects explicitly (and can disconnect).
-    const suggested = connected.length === 0 && companies.length === 1 ? companies[0].slug : "";
+    const suggested = connectedCount === 0 && companies.length === 1 ? companies[0].slug : "";
     setting
       .addText((text) => {
         input = text;
@@ -127,7 +259,7 @@ export class HubSettingTab extends PluginSettingTab {
       .addButton((b) => {
         button = b;
         b.setButtonText(t("connect")).onClick(() => void connect());
-        if (connected.length === 0) b.setCta();
+        if (connectedCount === 0) b.setCta();
       });
   }
 
@@ -135,7 +267,7 @@ export class HubSettingTab extends PluginSettingTab {
    * Disconnects the vault from a company, confirmed on the button itself like uninstalling a plugin.
    * Installed plugins stay; plugins no other connected company offers stop getting updates.
    */
-  private addDisconnect(setting: Setting, company: Company): void {
+  private addDisconnect(setting: Setting, company: Company): () => void {
     const { plugin } = this;
     const { settings } = plugin;
     let armed = false;
@@ -147,7 +279,7 @@ export class HubSettingTab extends PluginSettingTab {
           b.setButtonText(t("disconnectConfirm")).setDestructive();
           timer = window.setTimeout(() => {
             armed = false;
-            b.buttonEl.removeClass("mod-warning");
+            b.buttonEl.removeClass("mod-warning", "mod-destructive");
             b.setButtonText(t("disconnect"));
           }, 4000);
           return;
@@ -166,139 +298,48 @@ export class HubSettingTab extends PluginSettingTab {
         await plugin.saveSettings();
         plugin.updates.reset();
         new Notice(t("disconnected", { name: company.name }));
-        void this.render();
+        this.refresh();
       }),
     );
-  }
-
-  private renderGuide(containerEl: HTMLElement, open: boolean): void {
-    const details = containerEl.createEl("details", { cls: "silk-hub-guide" });
-    details.open = open;
-    details.createEl("summary", { text: t("guideTitle") });
-    const list = details.createEl("ol");
-    for (const step of t("guideSteps").split("|")) appendWithBold(list.createEl("li"), step);
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }
 
   /**
-   * Builds the page off-screen and swaps it in at once, keeping the scroll position,
-   * so a re-render (also when Obsidian refreshes its plugin settings) doesn't flicker or jump.
+   * Company plugins with the group's own search. Each row updates itself after an action,
+   * so installing or switching a plugin doesn't redraw the page.
    */
-  async render(): Promise<void> {
-    const renderId = ++this.renderId;
-    const root = createDiv();
-    await this.build(root, renderId);
-    if (renderId !== this.renderId) return;
-    const scrollTop = this.containerEl.scrollTop;
-    this.containerEl.empty();
-    this.containerEl.appendChild(root);
-    this.containerEl.scrollTop = scrollTop;
-  }
-
-  private async build(containerEl: HTMLElement, renderId: number): Promise<void> {
+  private pluginsGroup(catalog: CatalogPlugin[], companies: Company[], installed: Record<string, string>): SettingDefinitionItem {
     const { plugin } = this;
-    const { settings, client } = plugin;
-    this.renderGuide(containerEl, !client.signedIn || settings.companyIds.length === 0);
-
-    new Setting(containerEl)
-      .setName(t("serverUrl"))
-      .setDesc(t("serverUrlDesc"))
-      .addText((text) =>
-        text
-          .setPlaceholder("https://hub.example.com")
-          .setValue(settings.serverUrl)
-          .onChange(async (value) => {
-            settings.serverUrl = value.trim();
-            await plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl).setName(t("account")).setHeading();
-
-    if (!client.signedIn) {
-      new Setting(containerEl)
-        .setName(t("signIn"))
-        .setDesc(t("signInDesc"))
-        .addButton((button) =>
-          button
-            .setButtonText(t("signIn"))
-            .setCta()
-            .setDisabled(!settings.serverUrl)
-            .onClick(() => void plugin.startSignIn()),
-        );
-      return;
-    }
-
-    new Setting(containerEl)
-      .setName(t("signedInAs", { email: settings.accountEmail ?? "" }))
-      .addButton((button) =>
-        button.setButtonText(t("signOut")).onClick(async () => {
-          await plugin.signOut();
-          void this.render();
-        }),
-      );
-
-    let companies: Company[];
-    let catalog: CatalogPlugin[] = [];
-    try {
-      const me = await client.me();
-      companies = me.companies;
-      // Drop companies the user was removed from.
-      const ids = settings.companyIds.filter((id) => companies.some((c) => c.id === id));
-      if (ids.length !== settings.companyIds.length) {
-        settings.companyIds = ids;
-        await plugin.saveSettings();
-      }
-      catalog = await client.catalog(settings.companyIds);
-    } catch (err) {
-      if (renderId !== this.renderId) return;
-      if (err instanceof NotSignedInError) return void this.render();
-      containerEl.createEl("p", { cls: "silk-hub-error", text: t("loadFailed", { error: (err as Error).message }) });
-      return;
-    }
-    if (renderId !== this.renderId) return;
-
-    if (companies.length === 0) {
-      containerEl.createEl("p", { cls: "silk-hub-muted", text: t("noCompanies", { email: settings.accountEmail ?? "" }) });
-      return;
-    }
-
-    this.renderCompanies(containerEl, companies);
-
-    if (settings.companyIds.length === 0) return;
-
-    const pluginsEl = containerEl.createDiv();
-    await this.renderPlugins(pluginsEl, catalog, companies);
-    if (renderId !== this.renderId) return;
-
-    new Setting(containerEl).setName(t("updates")).setHeading();
-    new Setting(containerEl)
-      .setName(t("autoUpdate"))
-      .setDesc(t("autoUpdateDesc"))
-      .addToggle((toggle) =>
-        toggle.setValue(settings.autoUpdate).onChange(async (value) => {
-          settings.autoUpdate = value;
-          await plugin.saveSettings();
-        }),
-      );
-    new Setting(containerEl)
-      .setName(t("checkInterval"))
-      .setDesc(t("checkIntervalDesc"))
-      .addDropdown((dropdown) => {
-        dropdown.addOption("0", t("never"));
-        for (const n of [1, 3, 6, 12, 24]) dropdown.addOption(String(n), t("hours", { n }));
-        dropdown.setValue(String(settings.checkIntervalHours)).onChange(async (value) => {
-          settings.checkIntervalHours = Number(value);
-          await plugin.saveSettings();
-          plugin.scheduleChecks();
-        });
-      });
-    new Setting(containerEl)
-      .addButton((button) => button.setButtonText(t("openChangelog")).onClick(() => void plugin.openChangelog()))
-      .addButton((button) =>
-        button.setButtonText(t("checkNow")).onClick(async () => {
-          if (!settings.serverUrl) return void new Notice(t("noServer"));
-          await plugin.updates.check(true);
-        }),
-      );
+    const several = plugin.settings.companyIds.length > 1;
+    return {
+      type: "group",
+      heading: t("plugins"),
+      cls: "silk-hub-plugins",
+      search:
+        catalog.length > 1
+          ? {
+              placeholder: t("searchPlugins"),
+              match: (def, query) => {
+                const q = query.toLowerCase().trim();
+                return [def.name, ...(def.aliases ?? [])].some((text) => text.toLowerCase().includes(q));
+              },
+            }
+          : undefined,
+      extraButtons: [(b) => b.setIcon("refresh-cw").setTooltip(t("refresh")).onClick(() => this.refresh())],
+      items:
+        catalog.length === 0
+          ? [{ name: t("noPlugins"), searchable: false }]
+          : catalog.map((p) => {
+              // With several companies connected, each plugin says which of them offer it.
+              const companyNames = several ? companies.filter((c) => p.companies.includes(c.id)).map((c) => c.name) : [];
+              return {
+                name: p.name,
+                aliases: [p.id, p.description],
+                render: (s: Setting) => void new PluginRow(plugin, s, p, installed[p.id] ?? null, companyNames),
+              };
+            }),
+    };
   }
 }
