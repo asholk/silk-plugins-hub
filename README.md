@@ -1,6 +1,6 @@
-# Silk Plugins Hub
+# Silk Hub
 
-Install and update your company's private Obsidian plugins from a Silk Plugins Hub server, with a changelog for every release.
+Install and update your company's private Obsidian plugins from a Silk Hub server, with a changelog for every release.
 
 Your administrator decides which plugins each company can use. You sign in, connect your companies by their codes and install the plugins you need right from the settings, without copying files by hand.
 
@@ -16,19 +16,19 @@ Your administrator decides which plugins each company can use. You sign in, conn
 ## Requirements
 
 > [!important] An account is required
-> The plugin works only with a [Silk Plugins Hub server](https://github.com/asholk/silk-plugins-hub-server) run by your company. You need an account on that server that your administrator has added to a company. Without a server and an account, the plugin has nothing to show.
+> The plugin works only with a [Silk Hub server](https://github.com/asholk/silk-plugins-hub-server) run by your company. You need an account on that server that your administrator has added to a company. Without a server and an account, the plugin has nothing to show.
 
-- Obsidian 1.11.4 or later.
+- Obsidian 1.13.0 or later.
 
 ## Install
 
-Open **Settings → Community plugins → Browse**, search for **Silk Plugins Hub**, select **Install**, then **Enable**.
+Open **Settings → Community plugins → Browse**, search for **Silk Hub**, select **Install**, then **Enable**.
 
 To test beta versions before they reach the directory, install the plugin with [BRAT](https://github.com/TfTHacker/obsidian42-brat): run **BRAT: Add a beta plugin for testing** and enter the address of this repository.
 
 ## Get started
 
-1. Open **Settings → Silk Plugins Hub**.
+1. Open **Settings → Silk Hub**.
 2. Enter the server address your administrator gave you.
 3. Select **Sign in with Google** and finish signing in in your browser.
 4. Enter your company code and select **Connect**. Repeat for every company you work with.
@@ -36,11 +36,11 @@ To test beta versions before they reach the directory, install the plugin with [
 
 ## Run your own server
 
-The server is open source: [asholk/silk-plugins-hub-server](https://github.com/asholk/silk-plugins-hub-server). It runs locally with Node.js or in Yandex Cloud as a serverless function, and plugin repositories publish releases to it from CI. Administrators manage companies, users and plugins with the Silk Plugins Hub Admin plugin.
+The server is open source: [asholk/silk-plugins-hub-server](https://github.com/asholk/silk-plugins-hub-server). It runs locally with Node.js or in Yandex Cloud as a serverless function, and plugin repositories publish releases to it from CI. Administrators manage companies, users and plugins with the Silk Hub Admin plugin.
 
 ## Network use and privacy
 
-This plugin connects to the internet. It only talks to the Silk Plugins Hub server whose address you enter in the settings, and to the file storage that server links to:
+This plugin connects to the internet. It only talks to the Silk Hub server whose address you enter in the settings, and to the file storage that server links to:
 
 - to sign you in (through Google, in your browser);
 - to load your companies' plugin catalogs, plugin pages, instructions and changelogs;
@@ -55,7 +55,7 @@ The server is run by your company, not by the author of this plugin. It knows yo
 
 The hub installs plugins your company publishes into this vault's plugins folder. They are code from your company, not from the Obsidian community directory, so install only plugins your company trusts. Every file is checked against the SHA-256 checksum the server publishes before anything is written.
 
-Silk Plugins Hub never installs or updates itself: its own updates come through Obsidian's community plugins, like any other plugin.
+Silk Hub never installs or updates itself: its own updates come through Obsidian's community plugins, like any other plugin.
 
 ## For developers
 

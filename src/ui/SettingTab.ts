@@ -144,7 +144,7 @@ export class HubSettingTab extends PluginSettingTab {
       b.setButtonText(t("disconnect")).onClick(async () => {
         if (!armed) {
           armed = true;
-          b.setButtonText(t("disconnectConfirm")).setWarning();
+          b.setButtonText(t("disconnectConfirm")).setDestructive();
           timer = window.setTimeout(() => {
             armed = false;
             b.buttonEl.removeClass("mod-warning");

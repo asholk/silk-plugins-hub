@@ -21,7 +21,7 @@ interface TokenResponse {
   expiresIn: number;
 }
 
-/** Talks to the Silk Plugins Hub server. The refresh token lives in Obsidian's SecretStorage, the access token only in memory. */
+/** Talks to the Silk Hub server. The refresh token lives in Obsidian's SecretStorage, the access token only in memory. */
 export class HubClient {
   private accessToken: string | null = null;
   private accessExpiresAt = 0;

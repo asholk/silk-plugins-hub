@@ -9,7 +9,7 @@ const BACKUP_DIR = ".hub-backup";
 
 /**
  * Downloads, verifies and installs plugin releases into the vault's plugins folder, keeping one backup for rollback.
- * Silk Plugins Hub itself is never installed or rolled back this way: it updates only through Obsidian.
+ * Silk Hub itself is never installed or rolled back this way: it updates only through Obsidian.
  */
 export class Installer {
   constructor(

@@ -8,6 +8,9 @@ on:
 
 permissions:
   contents: write
+  # Build provenance attestations for the release files.
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -31,6 +34,14 @@ jobs:
             echo "Tag $GITHUB_REF_NAME doesn't match manifest.json version $version" >&2
             exit 1
           fi
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Create the release
         env:

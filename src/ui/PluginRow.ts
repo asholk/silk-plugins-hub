@@ -107,7 +107,7 @@ export class PluginRow {
       .onClick(async () => {
         if (!armed) {
           armed = true;
-          b.setButtonText(t("uninstallConfirmShort")).setWarning();
+          b.setButtonText(t("uninstallConfirmShort")).setDestructive();
           timer = window.setTimeout(() => {
             armed = false;
             b.buttonEl.removeClass("mod-warning");

@@ -67,7 +67,7 @@ export class UpdateService {
         if (interactive) this.plugin.openSettings();
         return;
       }
-      console.error("Silk Plugins Hub: update check failed", err);
+      console.error("Silk Hub: update check failed", err);
       if (interactive) new Notice(t("loadFailed", { error: (err as Error).message }));
     } finally {
       this.running = false;
@@ -84,7 +84,7 @@ export class UpdateService {
         applied.push(update);
         delete this.plugin.settings.skipped[update.id];
       } catch (err) {
-        console.error(`Silk Plugins Hub: failed to install ${update.id}`, err);
+        console.error(`Silk Hub: failed to install ${update.id}`, err);
         new Notice(t("installFailed", { name: update.name, error: (err as Error).message }), 10000);
       } finally {
         progress.hide();
