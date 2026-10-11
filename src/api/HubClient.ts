@@ -169,7 +169,7 @@ export class HubClient {
 
 function safeJson(res: RequestUrlResponse): { error?: string } | null {
   try {
-    return res.json;
+    return res.json as { error?: string } | null;
   } catch {
     return null;
   }

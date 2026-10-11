@@ -15,19 +15,16 @@ Your administrator decides which plugins each company can use. You sign in, conn
 
 ## Requirements
 
+> [!important] An account is required
+> The plugin works only with a Silk Plugins Hub server run by your company. You need an account on that server that your administrator has added to a company. Without a server and an account, the plugin has nothing to show.
+
 - Obsidian 1.11.4 or later.
-- A Silk Plugins Hub server run by your company, and an account your administrator has added to a company.
 
-## Install with BRAT
+## Install
 
-The plugin isn't in the community plugin directory yet. Install it with [BRAT](https://github.com/TfTHacker/obsidian42-brat):
+Open **Settings → Community plugins → Browse**, search for **Silk Plugins Hub**, select **Install**, then **Enable**.
 
-1. Install and turn on **BRAT** from **Settings → Community plugins**.
-2. Open the command palette and run **BRAT: Add a beta plugin for testing**.
-3. Enter the address of this repository and select **Add plugin**.
-4. Turn on **Silk Plugins Hub** in **Settings → Community plugins**.
-
-BRAT also keeps the hub itself up to date.
+To test beta versions before they reach the directory, install the plugin with [BRAT](https://github.com/TfTHacker/obsidian42-brat): run **BRAT: Add a beta plugin for testing** and enter the address of this repository.
 
 ## Get started
 
@@ -39,16 +36,22 @@ BRAT also keeps the hub itself up to date.
 
 ## Network use and privacy
 
-This plugin connects to the internet. It only talks to the Silk Plugins Hub server whose address you enter in the settings:
+This plugin connects to the internet. It only talks to the Silk Plugins Hub server whose address you enter in the settings, and to the file storage that server links to:
 
 - to sign you in (through Google, in your browser);
 - to load your companies' plugin catalogs, plugin pages, instructions and changelogs;
 - to send the ids and versions of company plugins installed in this vault, so the server can tell which updates you need;
-- to download plugin files.
+- to download plugin files by short-lived signed links.
 
-It doesn't send your notes or any other vault content, and it has no telemetry. Your sign-in session is kept in Obsidian's secret storage, not in the plugin's data file.
+It doesn't send your notes or any other vault content, and it has no client-side telemetry. Your sign-in session is kept in Obsidian's secret storage, not in the plugin's data file.
 
-The hub installs plugins your company publishes. They are code from your company, not from the Obsidian community directory, so install only plugins your company trusts.
+The server is run by your company, not by the author of this plugin. It knows your email address, your companies and the versions of company plugins you have installed. Ask your administrator how your company handles this data.
+
+## What the plugin installs
+
+The hub installs plugins your company publishes into this vault's plugins folder. They are code from your company, not from the Obsidian community directory, so install only plugins your company trusts. Every file is checked against the SHA-256 checksum the server publishes before anything is written.
+
+Silk Plugins Hub never installs or updates itself: its own updates come through Obsidian's community plugins, like any other plugin.
 
 ## For developers
 
@@ -56,6 +59,7 @@ The hub installs plugins your company publishes. They are code from your company
 npm install
 npm run dev       # rebuilds main.js on changes
 npm run build     # type check and production build
+npm run lint      # Obsidian's community plugin rules
 ```
 
 ### Releasing
@@ -64,7 +68,7 @@ npm run build     # type check and production build
 2. Run `npm version patch` (or `minor`, `major`). It updates `manifest.json`, `versions.json` and creates a tag without a "v".
 3. Run `git push --follow-tags`.
 
-The **Release** workflow builds the plugin and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`. BRAT picks it up from there.
+The **Release** workflow builds the plugin and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`. Obsidian and BRAT pick it up from there.
 
 ## License
 

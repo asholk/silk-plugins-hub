@@ -7,16 +7,19 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
-    "test:e2e": "node --no-warnings test/e2e.mjs"
+    "test:e2e": "node --no-warnings test/e2e.mjs",
+    "lint": "eslint ."
   },
   "author": "Alexander Shelkovov",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.20.5",
-    "builtin-modules": "^5.4.0",
     "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.4.2",
     "obsidian": "^1.14.4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.1"
   },
   "private": true
 }

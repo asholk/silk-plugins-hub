@@ -31,8 +31,9 @@ export class HubSettingTab extends PluginSettingTab {
    * Company plugins as a group with search, like BRAT. Each row updates itself after an action,
    * so installing or switching a plugin doesn't redraw the page.
    */
-  private async renderPlugins(el: HTMLElement, catalog: CatalogPlugin[], companies: Company[]): Promise<void> {
+  private async renderPlugins(el: HTMLElement, offered: CatalogPlugin[], companies: Company[]): Promise<void> {
     const { plugin } = this;
+    const catalog = offered.filter((p) => plugin.installer.manages(p.id));
     const rows: { row: PluginRow; name: string }[] = [];
     const group = new SettingGroup(el).setHeading(t("plugins"));
     group.addClass("silk-hub-plugins");
@@ -48,14 +49,17 @@ export class HubSettingTab extends PluginSettingTab {
       b
         .setIcon("refresh-cw")
         .setTooltip(t("refresh"))
-        .onClick(async () => {
-          const fresh = await plugin.client.catalog(plugin.settings.companyIds);
-          el.empty();
-          await this.renderPlugins(el, fresh, companies);
+        .onClick(() => {
+          void plugin.client.catalog(plugin.settings.companyIds).then(async (fresh) => {
+            el.empty();
+            await this.renderPlugins(el, fresh, companies);
+          });
         }),
     );
     if (catalog.length === 0) {
-      group.addSetting((setting) => setting.setDesc(t("noPlugins")));
+      group.addSetting((setting) => {
+        setting.setDesc(t("noPlugins"));
+      });
       return;
     }
     const installed = await plugin.installer.installedVersions(catalog.map((p) => p.id));

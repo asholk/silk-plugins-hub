@@ -7,12 +7,21 @@ import { reloadPlugin } from "./communityPlugins";
 const PLUGIN_FILES = ["main.js", "manifest.json", "styles.css"];
 const BACKUP_DIR = ".hub-backup";
 
-/** Downloads, verifies and installs plugin releases into the vault's plugins folder, keeping one backup for rollback. */
+/**
+ * Downloads, verifies and installs plugin releases into the vault's plugins folder, keeping one backup for rollback.
+ * Silk Plugins Hub itself is never installed or rolled back this way: it updates only through Obsidian.
+ */
 export class Installer {
   constructor(
     private app: App,
     private client: HubClient,
+    private selfId: string,
   ) {}
+
+  /** Whether the Hub may install this plugin: not itself. */
+  manages(id: string): boolean {
+    return id !== this.selfId;
+  }
 
   private pluginDir(id: string): string {
     return normalizePath(`${this.app.vault.configDir}/plugins/${id}`);
@@ -40,6 +49,7 @@ export class Installer {
 
   async install(update: PluginUpdate): Promise<void> {
     if (!/^[a-z0-9][a-z0-9-]*$/.test(update.id)) throw new Error(`invalid plugin id ${update.id}`);
+    if (!this.manages(update.id)) throw new Error(`${update.id} updates only through Obsidian`);
 
     // Download and verify everything before touching the plugin folder.
     const files = new Map<string, ArrayBuffer>();
@@ -82,6 +92,7 @@ export class Installer {
 
   /** Restores the version saved before the last update. Returns the restored version, or null without a backup. */
   async rollback(id: string): Promise<string | null> {
+    if (!this.manages(id)) return null;
     const dir = this.pluginDir(id);
     if (!(await this.app.vault.adapter.exists(`${dir}/${BACKUP_DIR}/manifest.json`))) return null;
     await this.restore(dir);

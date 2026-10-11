@@ -41,7 +41,7 @@ export class UpdateService {
       }
 
       const updates = result.updates.filter(
-        (u) => interactive || u.reason === "revoked" || settings.skipped[u.id] !== u.version,
+        (u) => installer.manages(u.id) && (interactive || u.reason === "revoked" || settings.skipped[u.id] !== u.version),
       );
       this.setPending(updates);
       if (updates.length === 0) {

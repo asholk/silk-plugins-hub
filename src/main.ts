@@ -24,7 +24,7 @@ export default class SilkPluginsHub extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     this.client = new HubClient(this.app, () => this.settings.serverUrl, () => this.onSignedOut());
-    this.installer = new Installer(this.app, this.client);
+    this.installer = new Installer(this.app, this.client, this.manifest.id);
     this.updates = new UpdateService(this);
 
     this.settingTab = new HubSettingTab(this.app, this);
