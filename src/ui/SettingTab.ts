@@ -172,13 +172,19 @@ export class HubSettingTab extends PluginSettingTab {
         name: t("signIn"),
         desc: t("signInDesc"),
         render: (s) => {
+          // The link is ready before the tap, so the browser opens on iOS too (see prepareSignIn).
+          // If the server address changed after that, the link is built on the tap (fine on desktop).
+          let url: string | null = null;
           s.addButton((b) =>
             b
               .setButtonText(t("signIn"))
               .setCta()
-              .setDisabled(!settings.serverUrl)
-              .onClick(() => void plugin.startSignIn()),
+              .onClick(() => {
+                if (url && url.startsWith(plugin.client.serverUrl + "/")) plugin.openSignIn(url);
+                else void plugin.startSignIn();
+              }),
           );
+          void plugin.prepareSignIn().then((prepared) => (url = prepared));
         },
       };
     }

@@ -19,7 +19,7 @@ export default class SilkPluginsHub extends Plugin {
   private settingTab!: HubSettingTab;
   private statusBarEl: HTMLElement | null = null;
   private checkTimer: number | null = null;
-  private pendingSignIn: PendingSignIn | null = null;
+  private pendingSignIn: (PendingSignIn & { serverUrl: string }) | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -76,11 +76,33 @@ export default class SilkPluginsHub extends Plugin {
     this.statusBarEl.setAttribute("aria-label", t("updatesAvailable", { n: count }));
   }
 
-  async startSignIn(): Promise<void> {
-    if (!this.client.serverUrl) return void new Notice(t("noServer"));
-    this.pendingSignIn = await createPendingSignIn();
-    window.open(this.client.authStartUrl(this.pendingSignIn.state, this.pendingSignIn.challenge));
+  /**
+   * Prepares the sign-in link ahead of the tap: iOS opens the browser only when window.open runs
+   * right in the tap handler, with no await before it. The same link is reused until it expires
+   * or the server address changes.
+   */
+  async prepareSignIn(): Promise<string | null> {
+    const serverUrl = this.client.serverUrl;
+    if (!serverUrl) return null;
+    const pending = this.pendingSignIn;
+    if (!pending || pending.serverUrl !== serverUrl || Date.now() - pending.startedAt > SIGN_IN_TTL_MS) {
+      this.pendingSignIn = { ...(await createPendingSignIn()), serverUrl };
+    }
+    const { state, challenge } = this.pendingSignIn as PendingSignIn;
+    return this.client.authStartUrl(state, challenge);
+  }
+
+  /** Opens a link from prepareSignIn() in the browser. Call it synchronously from the tap handler. */
+  openSignIn(url: string): void {
+    if (this.pendingSignIn) this.pendingSignIn.startedAt = Date.now();
+    window.open(url, "_blank");
     new Notice(t("signInOpened"));
+  }
+
+  async startSignIn(): Promise<void> {
+    const url = await this.prepareSignIn();
+    if (!url) return void new Notice(t("noServer"));
+    this.openSignIn(url);
   }
 
   private async finishSignIn(code: string | undefined, state: string | undefined): Promise<void> {
