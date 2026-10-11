@@ -1,6 +1,6 @@
 {
   "name": "silk-plugins-hub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Obsidian plugin: install and update company plugins from a Silk Plugins Hub server",
   "main": "main.js",
   "scripts": {
