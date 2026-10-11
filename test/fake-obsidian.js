@@ -65,6 +65,11 @@ export class PluginSettingTab {
     this.app = app;
     this.plugin = plugin;
   }
+  // Obsidian 1.13+: re-reads getSettingDefinitions(); the test only checks it can be called.
+  update() {
+    this.settingItems = this.getSettingDefinitions?.() ?? [];
+  }
+  hide() {}
 }
 export class Setting {}
 export class SettingGroup {}
