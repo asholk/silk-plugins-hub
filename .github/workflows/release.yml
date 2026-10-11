@@ -1,0 +1,39 @@
+# Publishes a GitHub release when a version tag is pushed (for example `0.2.0`, without a "v").
+# BRAT and Obsidian read main.js, manifest.json and styles.css from the release assets.
+name: Release
+
+on:
+  push:
+    tags: ["*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Check that the tag matches manifest.json
+        run: |
+          version=$(node -p "require('./manifest.json').version")
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match manifest.json version $version" >&2
+            exit 1
+          fi
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" main.js manifest.json styles.css \
+            --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
