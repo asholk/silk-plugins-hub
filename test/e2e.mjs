@@ -57,6 +57,14 @@ await esbuild.build({
   alias: { obsidian: path.join(here, "fake-obsidian.js") },
   logLevel: "error",
 });
+await esbuild.build({
+  entryPoints: [path.join(here, "../src/install/communityPlugins.ts")],
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  outfile: path.join(tmp, "community.mjs"),
+  logLevel: "error",
+});
 const opened = [];
 globalThis.window = { setTimeout, clearTimeout, setInterval, clearInterval, open: (url) => opened.push(url) };
 const { default: Hub } = await import(pathToFileURL(bundle).href);
@@ -109,20 +117,26 @@ try {
   const [withCard] = await hub.client.catalog(1);
   assert.equal(withCard.instructions, "Нажмите значок на боковой панели");
   assert.equal(withCard.hasCard, true);
-  const card = await hub.client.card("hub-test-plugin");
+  const card = await hub.client.doc("hub-test-plugin", "card");
   assert.match(card.markdown, /Подробное описание/);
   ok(`инструкция: «${withCard.instructions}», карточка из версии ${card.version}`);
 
-  step("Выбор плагина и установка (как кнопка «Установить выбранные»)");
-  hub.settings.selected = ["hub-test-plugin"];
-  await hub.updates.check(true);
-  assert.equal(log.modals.length, 1, "открылось окно обновлений");
-  assert.equal(hub.updates.pending[0].reason, "install");
-  ok(`окно показывает: ${hub.updates.pending.map((u) => `${u.name} ${u.version} (${u.changelog[0].changes[0].text})`).join(", ")}`);
-  await hub.updates.apply(hub.updates.pending);
+  step("Кнопка «Установить» у плагина");
+  const done = await hub.updates.installOne("hub-test-plugin");
+  assert.equal(done, true);
   assert.equal(installedVersion(), "1.0.0");
+  assert.deepEqual(hub.settings.selected, ["hub-test-plugin"]);
   assert.ok(log.pluginCalls.includes("enableAndSave:hub-test-plugin"));
+  assert.match(lastNotice(), /Hub Test Plugin 1.0.0 установлен/);
   ok("установлен 1.0.0 и включён");
+
+  step("Переключатель «Включён»");
+  const { setPluginEnabled, isPluginEnabled } = await import(pathToFileURL(path.join(tmp, "community.mjs")).href);
+  await setPluginEnabled(app, "hub-test-plugin", false);
+  assert.equal(isPluginEnabled(app, "hub-test-plugin"), false);
+  await setPluginEnabled(app, "hub-test-plugin", true);
+  assert.equal(isPluginEnabled(app, "hub-test-plugin"), true);
+  ok("выключен и снова включён");
 
   step("Нет обновлений");
   await hub.updates.check(true);
@@ -199,6 +213,20 @@ try {
   await hub.updates.check(false);
   assert.deepEqual(hub.settings.selected, []);
   assert.ok(fs.existsSync(pluginDir), "плагин не удалён");
+  ok(lastNotice());
+
+  step("Кнопка «Обновить» и «Удалить»");
+  db.prepare("INSERT INTO company_plugins (company_id, plugin_id, required) VALUES (1, 'hub-test-plugin', 0)").run();
+  hub.settings.selected = ["hub-test-plugin"];
+  release("1.4.0", "Changelog:\n- Новое: быстрый старт — чтобы не ждать загрузки");
+  assert.equal(await hub.updates.installOne("hub-test-plugin"), true);
+  assert.equal(installedVersion(), "1.4.0");
+  const [latestRelease] = await hub.client.changelog("hub-test-plugin");
+  assert.deepEqual(latestRelease.changes[0], { type: "new", text: "быстрый старт", why: "чтобы не ждать загрузки" });
+  ok(lastNotice());
+  await hub.updates.uninstall("hub-test-plugin", "Hub Test Plugin");
+  assert.ok(!fs.existsSync(pluginDir), "папка плагина удалена");
+  assert.deepEqual(hub.settings.selected, []);
   ok(lastNotice());
 
   step("Выход");

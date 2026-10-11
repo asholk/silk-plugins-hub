@@ -74,8 +74,9 @@ export class HubClient {
     });
   }
 
-  card(pluginId: string): Promise<{ version: string; markdown: string }> {
-    return this.call(`/api/plugins/${encodeURIComponent(pluginId)}/card`);
+  /** Plugin card (overview) or guide (detailed instructions) as Markdown. */
+  doc(pluginId: string, kind: "card" | "guide"): Promise<{ version: string; markdown: string }> {
+    return this.call(`/api/plugins/${encodeURIComponent(pluginId)}/${kind}`);
   }
 
   async changelog(pluginId: string): Promise<ReleaseInfo[]> {

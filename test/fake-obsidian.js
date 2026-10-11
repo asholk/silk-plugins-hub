@@ -148,6 +148,15 @@ export function createApp(vaultDir) {
       this.enabledPlugins.add(id);
       return true;
     },
+    async disablePluginAndSave(id) {
+      log.pluginCalls.push(`disableAndSave:${id}`);
+      this.enabledPlugins.delete(id);
+    },
+    async uninstallPlugin(id) {
+      log.pluginCalls.push(`uninstall:${id}`);
+      this.enabledPlugins.delete(id);
+      fs.rmSync(path.join(vaultDir, ".obsidian/plugins", id), { recursive: true, force: true });
+    },
     async disablePlugin(id) {
       log.pluginCalls.push(`disable:${id}`);
       this.enabledPlugins.delete(id);

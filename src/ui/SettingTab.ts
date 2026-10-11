@@ -3,7 +3,10 @@ import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
 import type CorporatePluginHub from "../main";
 import type { CatalogPlugin, Company } from "../settings";
-import { CardModal } from "./CardModal";
+import { isPluginEnabled, setPluginEnabled } from "../install/communityPlugins";
+import { compareVersions } from "./changes";
+import { confirm } from "./ConfirmModal";
+import { DocModal } from "./DocModal";
 
 /** Renders "text with **bold**" without innerHTML. */
 function appendWithBold(parent: HTMLElement, text: string): void {
@@ -25,6 +28,73 @@ export class HubSettingTab extends PluginSettingTab {
 
   display(): void {
     void this.render();
+  }
+
+  /**
+   * One catalog plugin: not installed → Install; installed → Update (when newer), Uninstall and an on/off switch.
+   * Details and Instructions open the plugin card and guide.
+   */
+  private renderPlugin(containerEl: HTMLElement, p: CatalogPlugin, installed: string | null): void {
+    const { plugin } = this;
+    const latest = p.latest?.version ?? null;
+    const hasUpdate = !!installed && !!latest && compareVersions(latest, installed) > 0;
+    const meta = [
+      installed ? t("installed", { version: installed }) : t("notInstalled"),
+      latest ? t("latest", { version: latest }) : t("notReleased"),
+      p.required ? t("required") : null,
+    ].filter(Boolean);
+
+    const setting = new Setting(containerEl).setName(p.name).setDesc(p.description);
+    setting.settingEl.addClass("corp-hub-plugin-row");
+    if (p.instructions) setting.descEl.createDiv({ cls: "corp-hub-instructions", text: t("howToStart", { text: p.instructions }) });
+    setting.descEl.createDiv({ cls: "corp-hub-muted", text: meta.join(" · ") });
+
+    if (p.hasCard) {
+      setting.addExtraButton((b) =>
+        b.setIcon("info").setTooltip(t("details")).onClick(() => new DocModal(this.app, plugin.client, p.id, p.name, "card").open()),
+      );
+    }
+    if (p.hasGuide) {
+      setting.addExtraButton((b) =>
+        b.setIcon("book-open").setTooltip(t("guide")).onClick(() => new DocModal(this.app, plugin.client, p.id, p.name, "guide").open()),
+      );
+    }
+
+    const run = async (action: () => Promise<unknown>) => {
+      setting.settingEl.addClass("is-busy");
+      await action();
+      void this.render();
+    };
+
+    if (!installed) {
+      if (latest) {
+        setting.addButton((b) => b.setButtonText(t("install")).setCta().onClick(() => run(() => plugin.updates.installOne(p.id))));
+      }
+      return;
+    }
+    if (hasUpdate) {
+      setting.addButton((b) =>
+        b.setButtonText(t("update", { version: latest ?? "" })).setCta().onClick(() => run(() => plugin.updates.installOne(p.id))),
+      );
+    }
+    if (!p.required) {
+      setting.addExtraButton((b) =>
+        b
+          .setIcon("trash-2")
+          .setTooltip(t("uninstall"))
+          .onClick(async () => {
+            if (await confirm(this.app, t("uninstallConfirm", { name: p.name }), t("uninstall"))) {
+              await run(() => plugin.updates.uninstall(p.id, p.name));
+            }
+          }),
+      );
+    }
+    setting.addToggle((toggle) =>
+      toggle
+        .setTooltip(t("enabled"))
+        .setValue(isPluginEnabled(this.app, p.id))
+        .onChange((value) => void run(() => setPluginEnabled(this.app, p.id, value))),
+    );
   }
 
   private renderGuide(containerEl: HTMLElement, open: boolean): void {
@@ -127,41 +197,7 @@ export class HubSettingTab extends PluginSettingTab {
     for (const p of catalog) {
       const installed = await plugin.installer.installedVersion(p.id);
       if (renderId !== this.renderId) return;
-      const meta = [
-        installed ? t("installed", { version: installed }) : null,
-        p.latest ? t("latest", { version: p.latest.version }) : t("notReleased"),
-        p.required ? t("required") : null,
-      ].filter(Boolean);
-      const setting = new Setting(containerEl).setName(p.name).setDesc(p.description);
-      if (p.instructions) setting.descEl.createDiv({ cls: "corp-hub-instructions", text: t("howToStart", { text: p.instructions }) });
-      setting.descEl.createDiv({ cls: "corp-hub-muted", text: meta.join(" · ") });
-      if (p.hasCard) {
-        setting.addButton((button) =>
-          button.setButtonText(t("details")).onClick(() => new CardModal(this.app, client, p.id, p.name).open()),
-        );
-      }
-      setting.addToggle((toggle) =>
-        toggle
-          .setValue(p.required || settings.selected.includes(p.id))
-          .setDisabled(p.required)
-          .onChange(async (value) => {
-            settings.selected = value
-              ? [...new Set([...settings.selected, p.id])]
-              : settings.selected.filter((id) => id !== p.id);
-            await plugin.saveSettings();
-          }),
-      );
-    }
-    if (catalog.length > 0) {
-      new Setting(containerEl).addButton((button) =>
-        button
-          .setButtonText(t("installSelected"))
-          .setCta()
-          .onClick(async () => {
-            await plugin.updates.check(true);
-            void this.render();
-          }),
-      );
+      this.renderPlugin(containerEl, p, installed);
     }
 
     new Setting(containerEl).setName(t("updates")).setHeading();

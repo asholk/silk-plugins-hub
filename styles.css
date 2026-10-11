@@ -124,3 +124,71 @@
 .corp-hub-card-modal {
   width: min(760px, 90vw);
 }
+
+.corp-hub-plugin-row.is-busy {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.corp-hub-changelog-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--size-4-2);
+}
+
+.corp-hub-changelog-title {
+  font-weight: var(--font-semibold);
+}
+
+.corp-hub-tree .tree-item-flair-outer {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+.corp-hub-tree-version {
+  padding-left: var(--size-4-8);
+}
+
+.corp-hub-tree-empty {
+  padding-left: var(--size-4-8);
+}
+
+.corp-hub-badge.mod-new {
+  color: var(--color-green);
+  border-color: var(--color-green);
+}
+
+.corp-hub-changes-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--size-4-2);
+}
+
+.corp-hub-changes-table th,
+.corp-hub-changes-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--size-4-2);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.corp-hub-changes-table th {
+  color: var(--text-muted);
+  font-weight: var(--font-medium);
+  font-size: var(--font-ui-smaller);
+}
+
+.corp-hub-change-type {
+  white-space: nowrap;
+}
+
+.corp-hub-change-type .corp-hub-change-icon {
+  margin-right: var(--size-4-1);
+  vertical-align: middle;
+}
+
+.corp-hub-changes-modal {
+  width: min(720px, 90vw);
+}

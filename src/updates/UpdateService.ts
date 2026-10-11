@@ -1,4 +1,5 @@
 import { Notice } from "obsidian";
+import { uninstallPlugin } from "../install/communityPlugins";
 import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
 import type CorporatePluginHub from "../main";
@@ -92,6 +93,44 @@ export class UpdateService {
     await this.plugin.saveSettings();
     this.setPending(this.pending.filter((p) => !applied.includes(p)));
     return applied;
+  }
+
+  /** Installs or updates one plugin from the catalog right away. Returns true on success. */
+  async installOne(pluginId: string): Promise<boolean> {
+    const { settings, client, installer } = this.plugin;
+    if (settings.companyId === null) return false;
+    try {
+      const installed = await installer.installedVersions([pluginId]);
+      const result = await client.checkUpdates(settings.companyId, [pluginId], installed);
+      const update = result.updates.find((u) => u.id === pluginId);
+      if (!update) {
+        new Notice(t("upToDate"));
+        return false;
+      }
+      if (!settings.selected.includes(pluginId)) settings.selected.push(pluginId);
+      const applied = await this.apply([update]);
+      if (applied.length === 0) return false;
+      new Notice(
+        update.installedVersion
+          ? t("updatedOne", { name: update.name, version: update.version })
+          : t("installedOne", { name: update.name, version: update.version }),
+      );
+      return true;
+    } catch (err) {
+      new Notice(t("loadFailed", { error: (err as Error).message }));
+      return false;
+    }
+  }
+
+  /** Removes the plugin from the vault and stops offering it to this vault. */
+  async uninstall(pluginId: string, name: string): Promise<void> {
+    const { settings } = this.plugin;
+    await uninstallPlugin(this.plugin.app, pluginId);
+    settings.selected = settings.selected.filter((id) => id !== pluginId);
+    delete settings.skipped[pluginId];
+    await this.plugin.saveSettings();
+    this.setPending(this.pending.filter((u) => u.id !== pluginId));
+    new Notice(t("uninstalled", { name }));
   }
 
   async skip(update: PluginUpdate): Promise<void> {

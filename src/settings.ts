@@ -30,6 +30,8 @@ export interface Company {
 export interface ChangeItem {
   type: "new" | "improved" | "fixed" | "other";
   text: string;
+  /** Why the change was made, if the author wrote it after a dash. */
+  why?: string;
 }
 
 export interface ReleaseInfo {
@@ -46,6 +48,7 @@ export interface CatalogPlugin {
   instructions: string;
   required: boolean;
   hasCard: boolean;
+  hasGuide: boolean;
   latest: ReleaseInfo | null;
 }
 
