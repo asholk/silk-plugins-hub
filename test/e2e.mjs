@@ -19,7 +19,7 @@ const step = (name) => console.log(`\n▶ ${name}`);
 const ok = (msg) => console.log(`  ✓ ${msg}`);
 
 // --- Hub Service on a random port with a throwaway database ---
-const { buildApp } = await import(pathToFileURL(path.join(root, "hub-service/src/server.js")).href);
+const { buildApp, openFiles } = await import(pathToFileURL(path.join(root, "hub-service/src/server.js")).href);
 const { loadConfig } = await import(pathToFileURL(path.join(root, "hub-service/src/config.js")).href);
 const { storeRelease } = await import(pathToFileURL(path.join(root, "hub-service/src/releases.js")).href);
 const config = loadConfig({ SESSION_SECRET: crypto.randomBytes(32).toString("hex"), DEV_LOGIN: "1", DATA_DIR: path.join(tmp, "data"), PORT: "0" });
@@ -27,24 +27,28 @@ const { app: server, ctx } = await buildApp(config, { logger: false });
 await server.listen({ port: 0, host: "127.0.0.1" });
 const base = `http://127.0.0.1:${server.server.address().port}`;
 config.baseUrl = base;
-const { db } = ctx;
+// Download links point at the real port, known only after listen().
+ctx.files = openFiles(config);
+const { store } = ctx;
 
-db.prepare("INSERT INTO companies (slug, name) VALUES ('hub', 'HUB')").run();
-db.prepare("INSERT INTO plugins (id, name, description) VALUES ('hub-test-plugin', 'Hub Test Plugin', 'test')").run();
-db.prepare("INSERT INTO company_plugins (company_id, plugin_id, required) VALUES (1, 'hub-test-plugin', 0)").run();
+await store.put("companies", { id: 1, slug: "hub", name: "HUB", email_domains: "" });
+await store.put("plugins", { id: "hub-test-plugin", name: "Hub Test Plugin", description: "test", instructions: "" });
+await store.put("company_plugins", { company_id: 1, plugin_id: "hub-test-plugin", required: false });
+const setRelease = async (version, patch, pluginId = "hub-test-plugin") =>
+  store.put("releases", { ...(await store.get("releases", { plugin_id: pluginId, version })), ...patch });
 
 const testPluginDir = path.join(root, "hub-test-plugin");
 function release(version, notes) {
   const manifest = JSON.parse(fs.readFileSync(path.join(testPluginDir, "manifest.json"), "utf8"));
   manifest.version = version;
   const mainJs = fs.readFileSync(path.join(testPluginDir, "main.js"), "utf8") + `\n// build ${version}\n`;
-  return storeRelease(db, config.dataDir, "hub-test-plugin", {
+  return storeRelease(ctx, "hub-test-plugin", {
     tag: version,
     notes,
     files: { "main.js": Buffer.from(mainJs), "manifest.json": Buffer.from(JSON.stringify(manifest)) },
   });
 }
-release("1.0.0", "Changelog:\n- Новое: команда «Показать версию»");
+await release("1.0.0", "Changelog:\n- Новое: команда «Показать версию»");
 
 // --- Plugin bundle with the fake obsidian module ---
 const bundle = path.join(tmp, "plugin.mjs");
@@ -103,7 +107,8 @@ try {
   ok("refresh-токен лежит в SecretStorage, а не в data.json");
 
   step("Администратор добавляет пользователя в компанию HUB");
-  db.prepare("INSERT INTO memberships (user_id, company_id) SELECT id, 1 FROM users WHERE email = 'user@example.com'").run();
+  const u = (await store.list("users", { email: "user@example.com" }))[0];
+  await store.put("memberships", { user_id: u.id, company_id: 1 });
   const me = await hub.client.me();
   assert.deepEqual(me.companies.map((c) => c.name), ["HUB"]);
   assert.equal(await hub.client.lookupCompany("acme"), null);
@@ -114,8 +119,8 @@ try {
   ok(`компания видна, в каталоге: ${catalog.map((p) => `${p.name} ${p.latest.version}`).join(", ")}`);
 
   step("Краткая инструкция и карточка плагина");
-  db.prepare("UPDATE plugins SET instructions = 'Нажмите значок на боковой панели' WHERE id = 'hub-test-plugin'").run();
-  db.prepare("UPDATE releases SET card = ? WHERE version = '1.0.0'").run(["# Hub Test Plugin", "", "Подробное описание"].join("\n"));
+  await store.put("plugins", { ...(await store.get("plugins", { id: "hub-test-plugin" })), instructions: "Нажмите значок на боковой панели" });
+  await setRelease("1.0.0", { card: ["# Hub Test Plugin", "", "Подробное описание"].join("\n") });
   const [withCard] = await hub.client.catalog([1]);
   assert.equal(withCard.instructions, "Нажмите значок на боковой панели");
   assert.equal(withCard.hasCard, true);
@@ -146,7 +151,7 @@ try {
   ok(lastNotice());
 
   step("Выходит 1.1.0, автообновление выключено: только уведомление");
-  release("1.1.0", "Changelog:\n- Новое: экспорт в PDF\n- Исправлено: сортировка тегов");
+  await release("1.1.0", "Changelog:\n- Новое: экспорт в PDF\n- Исправлено: сортировка тегов");
   await hub.updates.check(false);
   assert.equal(installedVersion(), "1.0.0");
   assert.match(lastNotice(), /Доступны обновления плагинов: 1/);
@@ -162,7 +167,7 @@ try {
 
   step("Автообновление включено, выходит 1.2.0: ставится при открытии хранилища");
   hub.settings.autoUpdate = true;
-  release("1.2.0", "Changelog:\n- Улучшено: быстрее запуск");
+  await release("1.2.0", "Changelog:\n- Улучшено: быстрее запуск");
   log.pluginCalls.length = 0;
   await hub.updates.check(false);
   assert.equal(installedVersion(), "1.2.0");
@@ -173,9 +178,9 @@ try {
   ok("плагин перезапущен, резервная копия 1.0.0 сохранена");
 
   step("Новый обязательный плагин при автообновлении требует подтверждения");
-  db.prepare("INSERT INTO plugins (id, name) VALUES ('hub-required', 'Required Plugin')").run();
-  db.prepare("INSERT INTO company_plugins (company_id, plugin_id, required) VALUES (1, 'hub-required', 1)").run();
-  storeRelease(db, config.dataDir, "hub-required", {
+  await store.put("plugins", { id: "hub-required", name: "Required Plugin", description: "", instructions: "" });
+  await store.put("company_plugins", { company_id: 1, plugin_id: "hub-required", required: true });
+  await storeRelease(ctx, "hub-required", {
     tag: "1.0.0",
     notes: "",
     files: {
@@ -187,20 +192,19 @@ try {
   assert.ok(!fs.existsSync(path.join(vault, ".obsidian/plugins/hub-required")), "не установлен без подтверждения");
   assert.match(lastNotice(), /Доступны обновления плагинов: 1/);
   ok(`не поставлен молча: ${lastNotice()}`);
-  db.prepare("DELETE FROM company_plugins WHERE plugin_id = 'hub-required'").run();
+  await store.delete("company_plugins", { company_id: 1, plugin_id: "hub-required" });
 
   step("Подмена файла на сервере: хеш не совпадает, установка отменяется");
-  release("1.3.0", "Changelog:\n- Новое: что-то");
-  const asset = db.prepare("SELECT a.path FROM assets a JOIN releases r ON r.id = a.release_id WHERE r.version = '1.3.0' AND a.name = 'main.js'").get();
-  fs.appendFileSync(path.join(config.dataDir, asset.path), "\n// tampered");
+  await release("1.3.0", "Changelog:\n- Новое: что-то");
+  fs.appendFileSync(path.join(config.dataDir, "files/plugins/hub-test-plugin/1.3.0/main.js"), "\n// tampered");
   await hub.updates.check(false);
   assert.equal(installedVersion(), "1.2.0");
   assert.ok(log.notices.some((n) => /checksum mismatch/.test(n.message)));
   ok("1.3.0 не установлен, осталась 1.2.0: «checksum mismatch for main.js»");
-  db.prepare("UPDATE releases SET revoked = 1 WHERE version = '1.3.0'").run();
+  await setRelease("1.3.0", { revoked: true });
 
   step("Администратор отзывает 1.2.0: предлагается откат на 1.1.0");
-  db.prepare("UPDATE releases SET revoked = 1 WHERE version = '1.2.0'").run();
+  await setRelease("1.2.0", { revoked: true });
   await hub.updates.check(false);
   assert.equal(installedVersion(), "1.1.0");
   ok(`установлена ${installedVersion()}: ${lastNotice()}`);
@@ -211,16 +215,16 @@ try {
   ok(`восстановлена резервная копия: ${version}`);
 
   step("Компания убрала плагин из списка");
-  db.prepare("DELETE FROM company_plugins WHERE plugin_id = 'hub-test-plugin'").run();
+  await store.delete("company_plugins", { company_id: 1, plugin_id: "hub-test-plugin" });
   await hub.updates.check(false);
   assert.deepEqual(hub.settings.selected, []);
   assert.ok(fs.existsSync(pluginDir), "плагин не удалён");
   ok(lastNotice());
 
   step("Кнопка «Обновить» и «Удалить»");
-  db.prepare("INSERT INTO company_plugins (company_id, plugin_id, required) VALUES (1, 'hub-test-plugin', 0)").run();
+  await store.put("company_plugins", { company_id: 1, plugin_id: "hub-test-plugin", required: false });
   hub.settings.selected = ["hub-test-plugin"];
-  release("1.4.0", "Changelog:\n- Новое: быстрый старт — чтобы не ждать загрузки");
+  await release("1.4.0", "Changelog:\n- Новое: быстрый старт — чтобы не ждать загрузки");
   assert.equal(await hub.updates.installOne("hub-test-plugin"), true);
   assert.equal(installedVersion(), "1.4.0");
   const [latestRelease] = await hub.client.changelog("hub-test-plugin");

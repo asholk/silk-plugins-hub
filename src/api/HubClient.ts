@@ -98,10 +98,14 @@ export class HubClient {
     return res.releases;
   }
 
+  /**
+   * Downloads a file by the short-lived signed link from the hub (usually straight from its storage).
+   * The link itself grants access, so no session token is sent; integrity is checked by SHA-256 afterwards.
+   */
   async download(url: string): Promise<ArrayBuffer> {
-    if (!url.startsWith(this.serverUrl + "/")) throw new HubError(`unexpected asset host: ${url}`);
-    const token = await this.getAccessToken();
-    const res = await requestUrl({ url, headers: { Authorization: `Bearer ${token}` }, throw: false });
+    const local = url.startsWith(this.serverUrl + "/");
+    if (!local && !url.startsWith("https://")) throw new HubError(`unexpected asset link: ${url}`);
+    const res = await requestUrl({ url, throw: false });
     if (res.status !== 200) throw new HubError(`HTTP ${res.status}`, res.status);
     return res.arrayBuffer;
   }
