@@ -1,0 +1,93 @@
+.corp-hub-muted {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.corp-hub-error {
+  color: var(--text-error);
+}
+
+.corp-hub-clickable {
+  cursor: pointer;
+}
+
+.corp-hub-updates-modal .corp-hub-update {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: var(--size-4-2);
+  margin-bottom: var(--size-4-2);
+}
+
+.corp-hub-update-log {
+  max-height: 240px;
+  overflow-y: auto;
+  padding-left: var(--size-4-2);
+}
+
+.corp-hub-release {
+  margin-bottom: var(--size-4-3);
+}
+
+.corp-hub-release-head {
+  display: flex;
+  gap: var(--size-4-2);
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.corp-hub-plugin-name {
+  font-weight: var(--font-semibold);
+}
+
+.corp-hub-version {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+
+.corp-hub-badge {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-accent);
+  border: 1px solid var(--text-accent);
+  border-radius: var(--radius-s);
+  padding: 0 var(--size-4-1);
+}
+
+.corp-hub-changes {
+  list-style: none;
+  padding-left: 0;
+  margin: var(--size-4-1) 0;
+}
+
+.corp-hub-change {
+  display: flex;
+  gap: var(--size-4-2);
+  align-items: flex-start;
+  padding: var(--size-2-1) 0;
+}
+
+.corp-hub-change-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.corp-hub-change-icon svg {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}
+
+.corp-hub-change-new .corp-hub-change-icon {
+  color: var(--color-purple);
+}
+
+.corp-hub-change-improved .corp-hub-change-icon {
+  color: var(--color-blue);
+}
+
+.corp-hub-change-fixed .corp-hub-change-icon {
+  color: var(--color-green);
+}
+
+.corp-hub-changelog {
+  padding: var(--size-4-3);
+}
