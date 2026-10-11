@@ -57,6 +57,12 @@ const en = {
   typeImproved: "Improved",
   typeFixed: "Fixed",
   typeOther: "Changed",
+  guideTitle: "How to install company plugins",
+  guideSteps: "Enter the server address your administrator gave you.|Sign in with your Google account.|Choose your company. If the list is empty, ask the administrator to add your email.|Turn on the plugins you need and select **Install selected**.|Optionally turn on automatic updates.",
+  details: "Details",
+  howToStart: "How to start: {text}",
+  cardTitle: "{name} — about the plugin",
+  cardFailed: "Couldn't load the plugin card: {error}",
 };
 
 const ru: typeof en = {
@@ -116,6 +122,12 @@ const ru: typeof en = {
   typeImproved: "Улучшено",
   typeFixed: "Исправлено",
   typeOther: "Изменено",
+  guideTitle: "Как установить плагины компании",
+  guideSteps: "Укажите адрес сервера, который дал администратор.|Войдите через аккаунт Google.|Выберите компанию. Если списка нет, попросите администратора добавить вашу почту.|Включите нужные плагины и нажмите **Установить выбранные**.|При желании включите автообновление.",
+  details: "Подробнее",
+  howToStart: "Как начать: {text}",
+  cardTitle: "{name} — о плагине",
+  cardFailed: "Не удалось загрузить карточку плагина: {error}",
 };
 
 export type MessageKey = keyof typeof en;

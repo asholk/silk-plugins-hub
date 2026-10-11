@@ -43,7 +43,9 @@ export interface CatalogPlugin {
   id: string;
   name: string;
   description: string;
+  instructions: string;
   required: boolean;
+  hasCard: boolean;
   latest: ReleaseInfo | null;
 }
 
@@ -57,6 +59,7 @@ export interface UpdateAsset {
 export interface PluginUpdate {
   id: string;
   name: string;
+  instructions: string;
   required: boolean;
   installedVersion: string | null;
   version: string;

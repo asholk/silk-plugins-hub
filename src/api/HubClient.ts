@@ -74,6 +74,10 @@ export class HubClient {
     });
   }
 
+  card(pluginId: string): Promise<{ version: string; markdown: string }> {
+    return this.call(`/api/plugins/${encodeURIComponent(pluginId)}/card`);
+  }
+
   async changelog(pluginId: string): Promise<ReleaseInfo[]> {
     const res = await this.call<{ releases: ReleaseInfo[] }>(`/api/plugins/${encodeURIComponent(pluginId)}/changelog`);
     return res.releases;

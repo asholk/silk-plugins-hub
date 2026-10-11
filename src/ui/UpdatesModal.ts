@@ -64,6 +64,9 @@ export class UpdatesModal extends Modal {
             }),
         );
 
+      if (update.reason === "install" && update.instructions) {
+        card.createDiv({ cls: "corp-hub-instructions", text: t("howToStart", { text: update.instructions }) });
+      }
       const log = card.createDiv({ cls: "corp-hub-update-log" });
       update.changelog.forEach((release) => renderRelease(log, release));
     }

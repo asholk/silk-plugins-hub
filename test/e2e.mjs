@@ -103,6 +103,16 @@ try {
   assert.equal(catalog[0].latest.version, "1.0.0");
   ok(`компания видна, в каталоге: ${catalog.map((p) => `${p.name} ${p.latest.version}`).join(", ")}`);
 
+  step("Краткая инструкция и карточка плагина");
+  db.prepare("UPDATE plugins SET instructions = 'Нажмите значок на боковой панели' WHERE id = 'hub-test-plugin'").run();
+  db.prepare("UPDATE releases SET card = ? WHERE version = '1.0.0'").run(["# Hub Test Plugin", "", "Подробное описание"].join("\n"));
+  const [withCard] = await hub.client.catalog(1);
+  assert.equal(withCard.instructions, "Нажмите значок на боковой панели");
+  assert.equal(withCard.hasCard, true);
+  const card = await hub.client.card("hub-test-plugin");
+  assert.match(card.markdown, /Подробное описание/);
+  ok(`инструкция: «${withCard.instructions}», карточка из версии ${card.version}`);
+
   step("Выбор плагина и установка (как кнопка «Установить выбранные»)");
   hub.settings.selected = ["hub-test-plugin"];
   await hub.updates.check(true);

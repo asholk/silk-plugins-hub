@@ -3,6 +3,15 @@ import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
 import type CorporatePluginHub from "../main";
 import type { CatalogPlugin, Company } from "../settings";
+import { CardModal } from "./CardModal";
+
+/** Renders "text with **bold**" without innerHTML. */
+function appendWithBold(parent: HTMLElement, text: string): void {
+  text.split(/(\*\*[^*]+\*\*)/).forEach((part) => {
+    if (part.startsWith("**") && part.endsWith("**")) parent.createEl("strong", { text: part.slice(2, -2) });
+    else if (part) parent.appendText(part);
+  });
+}
 
 export class HubSettingTab extends PluginSettingTab {
   private renderId = 0;
@@ -18,11 +27,20 @@ export class HubSettingTab extends PluginSettingTab {
     void this.render();
   }
 
+  private renderGuide(containerEl: HTMLElement, open: boolean): void {
+    const details = containerEl.createEl("details", { cls: "corp-hub-guide" });
+    details.open = open;
+    details.createEl("summary", { text: t("guideTitle") });
+    const list = details.createEl("ol");
+    for (const step of t("guideSteps").split("|")) appendWithBold(list.createEl("li"), step);
+  }
+
   async render(): Promise<void> {
     const renderId = ++this.renderId;
     const { containerEl, plugin } = this;
     const { settings, client } = plugin;
     containerEl.empty();
+    this.renderGuide(containerEl, !client.signedIn || settings.companyId === null);
 
     new Setting(containerEl)
       .setName(t("serverUrl"))
@@ -115,7 +133,13 @@ export class HubSettingTab extends PluginSettingTab {
         p.required ? t("required") : null,
       ].filter(Boolean);
       const setting = new Setting(containerEl).setName(p.name).setDesc(p.description);
+      if (p.instructions) setting.descEl.createDiv({ cls: "corp-hub-instructions", text: t("howToStart", { text: p.instructions }) });
       setting.descEl.createDiv({ cls: "corp-hub-muted", text: meta.join(" · ") });
+      if (p.hasCard) {
+        setting.addButton((button) =>
+          button.setButtonText(t("details")).onClick(() => new CardModal(this.app, client, p.id, p.name).open()),
+        );
+      }
       setting.addToggle((toggle) =>
         toggle
           .setValue(p.required || settings.selected.includes(p.id))

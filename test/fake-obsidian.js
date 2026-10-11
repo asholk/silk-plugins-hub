@@ -55,7 +55,11 @@ export class Notice {
 }
 
 export class Events {}
-export class Component {}
+export class Component {
+  load() {}
+  unload() {}
+}
+export const MarkdownRenderer = { render: async () => {} };
 export class PluginSettingTab {
   constructor(app, plugin) {
     this.app = app;
