@@ -25,6 +25,23 @@ export function renderChanges(parent: HTMLElement, changes: ChangeItem[]): void 
   }
 }
 
+/** Changes as a table: type, what changed, why. */
+export function renderChangesTable(parent: HTMLElement, changes: ChangeItem[]): void {
+  const table = parent.createEl("table", { cls: "corp-hub-changes-table" });
+  const head = table.createEl("thead").createEl("tr");
+  for (const key of ["colType", "colWhat", "colWhy"] as const) head.createEl("th", { text: t(key) });
+  const body = table.createEl("tbody");
+  for (const change of changes) {
+    const type = CHANGE_TYPES[change.type] ?? CHANGE_TYPES.other;
+    const row = body.createEl("tr", { cls: `corp-hub-change-${change.type}` });
+    const typeCell = row.createEl("td", { cls: "corp-hub-change-type" });
+    setIcon(typeCell.createSpan({ cls: "corp-hub-change-icon" }), type.icon);
+    typeCell.createSpan({ text: t(type.label) });
+    row.createEl("td", { text: change.text });
+    row.createEl("td", { cls: change.why ? "" : "corp-hub-muted", text: change.why || "—" });
+  }
+}
+
 export function renderRelease(parent: HTMLElement, release: ReleaseInfo): void {
   const el = parent.createDiv({ cls: "corp-hub-release" });
   const head = el.createDiv({ cls: "corp-hub-release-head" });

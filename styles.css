@@ -192,3 +192,122 @@
 .corp-hub-changes-modal {
   width: min(720px, 90vw);
 }
+
+.corp-hub-plugin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-1);
+  margin-top: var(--size-4-1);
+}
+
+.corp-hub-chip {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  background: var(--background-modifier-hover);
+  border-radius: var(--radius-s);
+  padding: 0 var(--size-4-2);
+}
+
+.corp-hub-chip.mod-installed {
+  color: var(--color-green);
+}
+
+.corp-hub-chip.mod-required {
+  color: var(--color-orange);
+}
+
+.corp-hub-info-modal {
+  width: min(820px, 92vw);
+}
+
+.corp-hub-info-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  padding-bottom: var(--size-4-3);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.corp-hub-info-desc {
+  font-size: var(--font-ui-medium);
+}
+
+.corp-hub-info-section {
+  padding-top: var(--size-4-3);
+}
+
+.corp-hub-info-section h3 {
+  margin: 0 0 var(--size-2-1);
+}
+
+.corp-hub-guide-modal {
+  width: min(1000px, 94vw);
+  height: min(760px, 88vh);
+}
+
+.corp-hub-guide-modal .modal-content {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.corp-hub-guide-layout {
+  display: flex;
+  gap: var(--size-4-4);
+  flex: 1;
+  min-height: 0;
+}
+
+.corp-hub-guide-toc {
+  flex: 0 0 220px;
+  overflow-y: auto;
+  border-right: 1px solid var(--background-modifier-border);
+  padding-right: var(--size-4-3);
+}
+
+.corp-hub-guide-toc-title {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--size-4-2);
+}
+
+.corp-hub-guide-toc-item {
+  cursor: pointer;
+  padding: var(--size-2-2) var(--size-4-2);
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.corp-hub-guide-toc-item:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.corp-hub-guide-toc-item.is-active {
+  background: var(--background-modifier-active-hover);
+  color: var(--text-normal);
+}
+
+.corp-hub-guide-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: var(--size-4-2);
+}
+
+@media (max-width: 700px) {
+  .corp-hub-guide-layout {
+    flex-direction: column;
+  }
+
+  .corp-hub-guide-toc {
+    flex: none;
+    border-right: none;
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding: 0 0 var(--size-4-2);
+  }
+}

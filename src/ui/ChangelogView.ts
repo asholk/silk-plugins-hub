@@ -4,7 +4,7 @@ import type CorporatePluginHub from "../main";
 import type { CatalogPlugin, ReleaseInfo } from "../settings";
 import { ChangesModal } from "./ChangesModal";
 import { compareVersions, formatDate } from "./changes";
-import { DocModal } from "./DocModal";
+import { GuideModal } from "./GuideModal";
 
 export const CHANGELOG_VIEW = "corporate-plugin-hub-changelog";
 
@@ -86,7 +86,7 @@ export class ChangelogView extends ItemView {
       setIcon(guide, "book-open");
       guide.addEventListener("click", (e) => {
         e.stopPropagation();
-        new DocModal(this.app, this.plugin.client, p.id, p.name, "guide").open();
+        new GuideModal(this.plugin, p).open();
       });
     }
     const children = item.createDiv({ cls: "tree-item-children" });

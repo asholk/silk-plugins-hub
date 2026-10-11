@@ -1,12 +1,9 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, SettingGroup } from "obsidian";
 import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
 import type CorporatePluginHub from "../main";
 import type { CatalogPlugin, Company } from "../settings";
-import { isPluginEnabled, setPluginEnabled } from "../install/communityPlugins";
-import { compareVersions } from "./changes";
-import { confirm } from "./ConfirmModal";
-import { DocModal } from "./DocModal";
+import { PluginRow } from "./PluginRow";
 
 /** Renders "text with **bold**" without innerHTML. */
 function appendWithBold(parent: HTMLElement, text: string): void {
@@ -31,70 +28,41 @@ export class HubSettingTab extends PluginSettingTab {
   }
 
   /**
-   * One catalog plugin: not installed → Install; installed → Update (when newer), Uninstall and an on/off switch.
-   * Details and Instructions open the plugin card and guide.
+   * Company plugins as a group with search, like BRAT. Each row updates itself after an action,
+   * so installing or switching a plugin doesn't redraw the page.
    */
-  private renderPlugin(containerEl: HTMLElement, p: CatalogPlugin, installed: string | null): void {
+  private async renderPlugins(el: HTMLElement, catalog: CatalogPlugin[]): Promise<void> {
     const { plugin } = this;
-    const latest = p.latest?.version ?? null;
-    const hasUpdate = !!installed && !!latest && compareVersions(latest, installed) > 0;
-    const meta = [
-      installed ? t("installed", { version: installed }) : t("notInstalled"),
-      latest ? t("latest", { version: latest }) : t("notReleased"),
-      p.required ? t("required") : null,
-    ].filter(Boolean);
-
-    const setting = new Setting(containerEl).setName(p.name).setDesc(p.description);
-    setting.settingEl.addClass("corp-hub-plugin-row");
-    if (p.instructions) setting.descEl.createDiv({ cls: "corp-hub-instructions", text: t("howToStart", { text: p.instructions }) });
-    setting.descEl.createDiv({ cls: "corp-hub-muted", text: meta.join(" · ") });
-
-    if (p.hasCard) {
-      setting.addExtraButton((b) =>
-        b.setIcon("info").setTooltip(t("details")).onClick(() => new DocModal(this.app, plugin.client, p.id, p.name, "card").open()),
+    const rows: { row: PluginRow; name: string }[] = [];
+    const group = new SettingGroup(el).setHeading(t("plugins"));
+    group.addClass("corp-hub-plugins");
+    if (catalog.length > 1) {
+      group.addSearch((search) =>
+        search.setPlaceholder(t("searchPlugins")).onChange((value) => {
+          const q = value.toLowerCase().trim();
+          for (const { row, name } of rows) row.element.toggle(q === "" || name.includes(q));
+        }),
       );
     }
-    if (p.hasGuide) {
-      setting.addExtraButton((b) =>
-        b.setIcon("book-open").setTooltip(t("guide")).onClick(() => new DocModal(this.app, plugin.client, p.id, p.name, "guide").open()),
-      );
-    }
-
-    const run = async (action: () => Promise<unknown>) => {
-      setting.settingEl.addClass("is-busy");
-      await action();
-      void this.render();
-    };
-
-    if (!installed) {
-      if (latest) {
-        setting.addButton((b) => b.setButtonText(t("install")).setCta().onClick(() => run(() => plugin.updates.installOne(p.id))));
-      }
+    group.addExtraButton((b) =>
+      b
+        .setIcon("refresh-cw")
+        .setTooltip(t("refresh"))
+        .onClick(async () => {
+          if (plugin.settings.companyId === null) return;
+          const fresh = await plugin.client.catalog(plugin.settings.companyId);
+          el.empty();
+          await this.renderPlugins(el, fresh);
+        }),
+    );
+    if (catalog.length === 0) {
+      group.addSetting((setting) => setting.setDesc(t("noPlugins")));
       return;
     }
-    if (hasUpdate) {
-      setting.addButton((b) =>
-        b.setButtonText(t("update", { version: latest ?? "" })).setCta().onClick(() => run(() => plugin.updates.installOne(p.id))),
-      );
+    const installed = await plugin.installer.installedVersions(catalog.map((p) => p.id));
+    for (const p of catalog) {
+      group.addSetting((setting) => rows.push({ row: new PluginRow(plugin, setting, p, installed[p.id] ?? null), name: p.name.toLowerCase() }));
     }
-    if (!p.required) {
-      setting.addExtraButton((b) =>
-        b
-          .setIcon("trash-2")
-          .setTooltip(t("uninstall"))
-          .onClick(async () => {
-            if (await confirm(this.app, t("uninstallConfirm", { name: p.name }), t("uninstall"))) {
-              await run(() => plugin.updates.uninstall(p.id, p.name));
-            }
-          }),
-      );
-    }
-    setting.addToggle((toggle) =>
-      toggle
-        .setTooltip(t("enabled"))
-        .setValue(isPluginEnabled(this.app, p.id))
-        .onChange((value) => void run(() => setPluginEnabled(this.app, p.id, value))),
-    );
   }
 
   private renderGuide(containerEl: HTMLElement, open: boolean): void {
@@ -105,11 +73,24 @@ export class HubSettingTab extends PluginSettingTab {
     for (const step of t("guideSteps").split("|")) appendWithBold(list.createEl("li"), step);
   }
 
+  /**
+   * Builds the page off-screen and swaps it in at once, keeping the scroll position,
+   * so a re-render (also when Obsidian refreshes its plugin settings) doesn't flicker or jump.
+   */
   async render(): Promise<void> {
     const renderId = ++this.renderId;
-    const { containerEl, plugin } = this;
+    const root = createDiv();
+    await this.build(root, renderId);
+    if (renderId !== this.renderId) return;
+    const scrollTop = this.containerEl.scrollTop;
+    this.containerEl.empty();
+    this.containerEl.appendChild(root);
+    this.containerEl.scrollTop = scrollTop;
+  }
+
+  private async build(containerEl: HTMLElement, renderId: number): Promise<void> {
+    const { plugin } = this;
     const { settings, client } = plugin;
-    containerEl.empty();
     this.renderGuide(containerEl, !client.signedIn || settings.companyId === null);
 
     new Setting(containerEl)
@@ -190,15 +171,9 @@ export class HubSettingTab extends PluginSettingTab {
 
     if (settings.companyId === null) return;
 
-    new Setting(containerEl).setName(t("plugins")).setHeading();
-    if (catalog.length === 0) {
-      containerEl.createEl("p", { cls: "corp-hub-muted", text: t("noPlugins") });
-    }
-    for (const p of catalog) {
-      const installed = await plugin.installer.installedVersion(p.id);
-      if (renderId !== this.renderId) return;
-      this.renderPlugin(containerEl, p, installed);
-    }
+    const pluginsEl = containerEl.createDiv();
+    await this.renderPlugins(pluginsEl, catalog);
+    if (renderId !== this.renderId) return;
 
     new Setting(containerEl).setName(t("updates")).setHeading();
     new Setting(containerEl)

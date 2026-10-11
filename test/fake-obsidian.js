@@ -67,6 +67,7 @@ export class PluginSettingTab {
   }
 }
 export class Setting {}
+export class SettingGroup {}
 export class ButtonComponent {}
 export class ItemView {}
 export class Modal {
