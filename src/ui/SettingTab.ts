@@ -115,6 +115,8 @@ export class HubSettingTab extends PluginSettingTab {
           name: t("checkNow"),
           aliases: [t("openChangelog")],
           render: (s) => {
+            // Two long buttons: on a phone they wrap instead of widening the page.
+            s.settingEl.addClass("silk-hub-actions");
             s.setName("")
               .addButton((b) => b.setButtonText(t("openChangelog")).onClick(() => void this.plugin.openChangelog()))
               .addButton((b) => b.setButtonText(t("checkNow")).onClick(() => void this.plugin.updates.check(true)));

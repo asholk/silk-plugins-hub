@@ -311,3 +311,25 @@
     padding: 0 0 var(--size-4-2);
   }
 }
+
+/* Nothing in the Silk Hub settings may widen the page: on phones it would scroll sideways. */
+.vertical-tab-content:has(.silk-hub-plugins) .setting-item-name,
+.vertical-tab-content:has(.silk-hub-plugins) .setting-item-description,
+.silk-hub-plugin-row .setting-item-info {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.silk-hub-actions .setting-item-control,
+.silk-hub-plugin-row .setting-item-control {
+  flex-wrap: wrap;
+  row-gap: var(--size-4-2);
+}
+
+.silk-hub-actions .setting-item-info:empty {
+  display: none;
+}
+
+.is-phone .silk-hub-actions .setting-item-control {
+  justify-content: flex-start;
+}
