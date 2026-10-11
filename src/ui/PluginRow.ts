@@ -22,6 +22,8 @@ export class PluginRow {
     private setting: Setting,
     private p: CatalogPlugin,
     installed: string | null,
+    /** Names of the companies offering the plugin; shown when the vault is connected to several. */
+    private companyNames: string[] = [],
   ) {
     this.installed = installed;
     setting.settingEl.addClass("silk-hub-plugin-row");
@@ -55,6 +57,7 @@ export class PluginRow {
     if (this.latest && this.installed !== this.latest) meta.createSpan({ cls: "silk-hub-chip", text: t("latest", { version: this.latest }) });
     if (!this.latest) meta.createSpan({ cls: "silk-hub-chip", text: t("notReleased") });
     if (this.p.required) meta.createSpan({ cls: "silk-hub-chip mod-required", text: t("required") });
+    if (this.companyNames.length > 0) meta.createSpan({ cls: "silk-hub-chip mod-company", text: this.companyNames.join(", ") });
   }
 
   private renderControls(): void {

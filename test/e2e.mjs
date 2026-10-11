@@ -98,7 +98,7 @@ try {
   assert.equal(hub.settings.accountEmail, "user@example.com");
   assert.ok(app.secretStorage.getSecret("silk-plugins-hub-session"), "refresh-токен в SecretStorage");
   assert.ok(!JSON.stringify(hub.data).includes("Token"), "токены не попали в data.json");
-  assert.equal(hub.settings.companyId, null);
+  assert.deepEqual(hub.settings.companyIds, []);
   ok(`вход выполнен: ${lastNotice()}`);
   ok("refresh-токен лежит в SecretStorage, а не в data.json");
 
@@ -106,15 +106,17 @@ try {
   db.prepare("INSERT INTO memberships (user_id, company_id) SELECT id, 1 FROM users WHERE email = 'user@example.com'").run();
   const me = await hub.client.me();
   assert.deepEqual(me.companies.map((c) => c.name), ["HUB"]);
-  hub.settings.companyId = me.companies[0].id;
-  const catalog = await hub.client.catalog(1);
+  assert.equal(await hub.client.lookupCompany("acme"), null);
+  const company = await hub.client.lookupCompany("HUB");
+  hub.settings.companyIds = [company.id];
+  const catalog = await hub.client.catalog(hub.settings.companyIds);
   assert.equal(catalog[0].latest.version, "1.0.0");
   ok(`компания видна, в каталоге: ${catalog.map((p) => `${p.name} ${p.latest.version}`).join(", ")}`);
 
   step("Краткая инструкция и карточка плагина");
   db.prepare("UPDATE plugins SET instructions = 'Нажмите значок на боковой панели' WHERE id = 'hub-test-plugin'").run();
   db.prepare("UPDATE releases SET card = ? WHERE version = '1.0.0'").run(["# Hub Test Plugin", "", "Подробное описание"].join("\n"));
-  const [withCard] = await hub.client.catalog(1);
+  const [withCard] = await hub.client.catalog([1]);
   assert.equal(withCard.instructions, "Нажмите значок на боковой панели");
   assert.equal(withCard.hasCard, true);
   const card = await hub.client.doc("hub-test-plugin", "card");

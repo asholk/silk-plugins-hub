@@ -23,16 +23,16 @@ export class UpdateService {
       if (interactive) new Notice(t("noServer"));
       return;
     }
-    if (!client.signedIn || settings.companyId === null || this.running) {
+    if (!client.signedIn || settings.companyIds.length === 0 || this.running) {
       if (interactive && !this.running) this.plugin.openSettings();
       return;
     }
     this.running = true;
     try {
-      const catalog = await client.catalog(settings.companyId);
+      const catalog = await client.catalog(settings.companyIds);
       const candidates = new Set([...settings.selected, ...catalog.filter((p) => p.required).map((p) => p.id)]);
       const installed = await installer.installedVersions(candidates);
-      const result = await client.checkUpdates(settings.companyId, settings.selected, installed);
+      const result = await client.checkUpdates(settings.companyIds, settings.selected, installed);
 
       if (result.removed.length > 0) {
         settings.selected = settings.selected.filter((id) => !result.removed.includes(id));
@@ -98,10 +98,10 @@ export class UpdateService {
   /** Installs or updates one plugin from the catalog right away. Returns true on success. */
   async installOne(pluginId: string): Promise<boolean> {
     const { settings, client, installer } = this.plugin;
-    if (settings.companyId === null) return false;
+    if (settings.companyIds.length === 0) return false;
     try {
       const installed = await installer.installedVersions([pluginId]);
-      const result = await client.checkUpdates(settings.companyId, [pluginId], installed);
+      const result = await client.checkUpdates(settings.companyIds, [pluginId], installed);
       const update = result.updates.find((u) => u.id === pluginId);
       if (!update) {
         new Notice(t("upToDate"));

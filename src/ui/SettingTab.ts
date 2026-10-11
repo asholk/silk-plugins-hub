@@ -31,7 +31,7 @@ export class HubSettingTab extends PluginSettingTab {
    * Company plugins as a group with search, like BRAT. Each row updates itself after an action,
    * so installing or switching a plugin doesn't redraw the page.
    */
-  private async renderPlugins(el: HTMLElement, catalog: CatalogPlugin[]): Promise<void> {
+  private async renderPlugins(el: HTMLElement, catalog: CatalogPlugin[], companies: Company[]): Promise<void> {
     const { plugin } = this;
     const rows: { row: PluginRow; name: string }[] = [];
     const group = new SettingGroup(el).setHeading(t("plugins"));
@@ -49,10 +49,9 @@ export class HubSettingTab extends PluginSettingTab {
         .setIcon("refresh-cw")
         .setTooltip(t("refresh"))
         .onClick(async () => {
-          if (plugin.settings.companyId === null) return;
-          const fresh = await plugin.client.catalog(plugin.settings.companyId);
+          const fresh = await plugin.client.catalog(plugin.settings.companyIds);
           el.empty();
-          await this.renderPlugins(el, fresh);
+          await this.renderPlugins(el, fresh, companies);
         }),
     );
     if (catalog.length === 0) {
@@ -61,21 +60,35 @@ export class HubSettingTab extends PluginSettingTab {
     }
     const installed = await plugin.installer.installedVersions(catalog.map((p) => p.id));
     for (const p of catalog) {
-      group.addSetting((setting) => rows.push({ row: new PluginRow(plugin, setting, p, installed[p.id] ?? null), name: p.name.toLowerCase() }));
+      // With several companies connected, each plugin says which of them offer it.
+      const companyNames =
+        plugin.settings.companyIds.length > 1 ? companies.filter((c) => p.companies.includes(c.id)).map((c) => c.name) : [];
+      group.addSetting((setting) =>
+        rows.push({ row: new PluginRow(plugin, setting, p, installed[p.id] ?? null, companyNames), name: p.name.toLowerCase() }),
+      );
     }
   }
 
-  /** The company is entered as text: its code from the administrator (or its name). */
-  private renderCompany(containerEl: HTMLElement, companies: Company[]): void {
+  /**
+   * Connected companies, each with Disconnect, and a field to add one more by its code (or name).
+   * Plugin lists of all connected companies are merged.
+   */
+  private renderCompanies(containerEl: HTMLElement, companies: Company[]): void {
     const { plugin } = this;
     const { settings, client } = plugin;
-    const current = companies.find((c) => c.id === settings.companyId) ?? null;
-    const setting = new Setting(containerEl).setName(t("company"));
+    new Setting(containerEl).setName(t("companies")).setHeading();
+    const connected = companies.filter((c) => settings.companyIds.includes(c.id));
+    for (const company of connected) {
+      const setting = new Setting(containerEl).setName(company.name).setDesc(t("companyCode", { code: company.slug }));
+      this.addDisconnect(setting, company);
+    }
+
+    const setting = new Setting(containerEl).setName(connected.length ? t("addCompany") : t("company"));
     const showDesc = (text: string, error = false) => {
       setting.descEl.setText(text);
       setting.descEl.toggleClass("silk-hub-error", error);
     };
-    showDesc(current ? t("companyConnected", { name: current.name }) : t("companyCodeDesc"));
+    showDesc(t("companyCodeDesc"));
 
     let input!: TextComponent;
     let button!: ButtonComponent;
@@ -86,10 +99,10 @@ export class HubSettingTab extends PluginSettingTab {
       try {
         const company = await client.lookupCompany(code);
         if (!company) return showDesc(t("companyNotFound", { code, email: settings.accountEmail ?? "" }), true);
-        if (company.id === settings.companyId) return showDesc(t("companyConnected", { name: company.name }));
-        settings.companyId = company.id;
-        settings.selected = [];
+        if (settings.companyIds.includes(company.id)) return showDesc(t("companyAlreadyConnected", { name: company.name }), true);
+        settings.companyIds = [...settings.companyIds, company.id];
         await plugin.saveSettings();
+        new Notice(t("companyAdded", { name: company.name }));
         void this.render();
       } catch (err) {
         showDesc(t("loadFailed", { error: (err as Error).message }), true);
@@ -97,33 +110,30 @@ export class HubSettingTab extends PluginSettingTab {
         button.setDisabled(false);
       }
     };
+    // With a single company the code is suggested, but the user connects explicitly (and can disconnect).
+    const suggested = connected.length === 0 && companies.length === 1 ? companies[0].slug : "";
     setting
       .addText((text) => {
         input = text;
-        // With a single company the code is suggested, but the user connects explicitly (and can disconnect).
-        const suggested = current ?? (companies.length === 1 ? companies[0] : null);
-        text.setPlaceholder(t("companyCodePlaceholder")).setValue(suggested?.slug ?? "");
-        text.setDisabled(current !== null);
+        text.setPlaceholder(t("companyCodePlaceholder")).setValue(suggested);
         text.inputEl.addEventListener("keydown", (e) => {
           if (e.key === "Enter") void connect();
         });
       })
       .addButton((b) => {
         button = b;
-        b.setButtonText(t("connect")).setCta().onClick(() => void connect());
+        b.setButtonText(t("connect")).onClick(() => void connect());
+        if (connected.length === 0) b.setCta();
       });
-    if (current) {
-      button.buttonEl.hide();
-      this.addDisconnect(setting);
-    }
   }
 
   /**
-   * Disconnects the vault from the company, confirmed on the button itself like uninstalling a plugin.
-   * Installed plugins stay; they just stop getting updates from the hub.
+   * Disconnects the vault from a company, confirmed on the button itself like uninstalling a plugin.
+   * Installed plugins stay; plugins no other connected company offers stop getting updates.
    */
-  private addDisconnect(setting: Setting): void {
+  private addDisconnect(setting: Setting, company: Company): void {
     const { plugin } = this;
+    const { settings } = plugin;
     let armed = false;
     let timer: number | null = null;
     setting.addButton((b) =>
@@ -139,12 +149,19 @@ export class HubSettingTab extends PluginSettingTab {
           return;
         }
         if (timer !== null) window.clearTimeout(timer);
-        plugin.settings.companyId = null;
-        plugin.settings.selected = [];
-        plugin.settings.skipped = {};
+        b.setDisabled(true);
+        const rest = settings.companyIds.filter((id) => id !== company.id);
+        try {
+          const offered = new Set((await plugin.client.catalog(rest)).map((p) => p.id));
+          settings.selected = settings.selected.filter((id) => offered.has(id));
+        } catch {
+          if (rest.length === 0) settings.selected = [];
+        }
+        settings.companyIds = rest;
+        if (rest.length === 0) settings.skipped = {};
         await plugin.saveSettings();
         plugin.updates.reset();
-        new Notice(t("disconnected"));
+        new Notice(t("disconnected", { name: company.name }));
         void this.render();
       }),
     );
@@ -176,7 +193,7 @@ export class HubSettingTab extends PluginSettingTab {
   private async build(containerEl: HTMLElement, renderId: number): Promise<void> {
     const { plugin } = this;
     const { settings, client } = plugin;
-    this.renderGuide(containerEl, !client.signedIn || settings.companyId === null);
+    this.renderGuide(containerEl, !client.signedIn || settings.companyIds.length === 0);
 
     new Setting(containerEl)
       .setName(t("serverUrl"))
@@ -221,8 +238,13 @@ export class HubSettingTab extends PluginSettingTab {
     try {
       const me = await client.me();
       companies = me.companies;
-      if (settings.companyId !== null && !companies.some((c) => c.id === settings.companyId)) settings.companyId = null;
-      if (settings.companyId !== null) catalog = await client.catalog(settings.companyId);
+      // Drop companies the user was removed from.
+      const ids = settings.companyIds.filter((id) => companies.some((c) => c.id === id));
+      if (ids.length !== settings.companyIds.length) {
+        settings.companyIds = ids;
+        await plugin.saveSettings();
+      }
+      catalog = await client.catalog(settings.companyIds);
     } catch (err) {
       if (renderId !== this.renderId) return;
       if (err instanceof NotSignedInError) return void this.render();
@@ -236,12 +258,12 @@ export class HubSettingTab extends PluginSettingTab {
       return;
     }
 
-    this.renderCompany(containerEl, companies);
+    this.renderCompanies(containerEl, companies);
 
-    if (settings.companyId === null) return;
+    if (settings.companyIds.length === 0) return;
 
     const pluginsEl = containerEl.createDiv();
-    await this.renderPlugins(pluginsEl, catalog);
+    await this.renderPlugins(pluginsEl, catalog, companies);
     if (renderId !== this.renderId) return;
 
     new Setting(containerEl).setName(t("updates")).setHeading();

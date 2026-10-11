@@ -50,13 +50,13 @@ export class ChangelogView extends ItemView {
     setIcon(refreshBtn, "refresh-cw");
     refreshBtn.addEventListener("click", () => void this.refresh());
 
-    if (settings.companyId === null || !client.signedIn) {
+    if (settings.companyIds.length === 0 || !client.signedIn) {
       root.createEl("p", { cls: "silk-hub-muted", text: t("signInDesc") });
       return;
     }
     let catalog: CatalogPlugin[];
     try {
-      catalog = await client.catalog(settings.companyId);
+      catalog = await client.catalog(settings.companyIds);
     } catch (err) {
       root.createEl("p", { cls: "silk-hub-error", text: t("loadFailed", { error: (err as Error).message }) });
       return;

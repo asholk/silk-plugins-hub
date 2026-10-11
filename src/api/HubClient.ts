@@ -73,15 +73,18 @@ export class HubClient {
     }
   }
 
-  async catalog(companyId: number): Promise<CatalogPlugin[]> {
-    const res = await this.call<{ plugins: CatalogPlugin[] }>(`/api/companies/${companyId}/plugins?appVersion=${encodeURIComponent(appVersion())}`);
+  async catalog(companyIds: number[]): Promise<CatalogPlugin[]> {
+    if (companyIds.length === 0) return [];
+    const res = await this.call<{ plugins: CatalogPlugin[] }>(
+      `/api/catalog?companies=${companyIds.join(",")}&appVersion=${encodeURIComponent(appVersion())}`,
+    );
     return res.plugins;
   }
 
-  checkUpdates(companyId: number, selected: string[], installed: Record<string, string>): Promise<CheckResult> {
+  checkUpdates(companyIds: number[], selected: string[], installed: Record<string, string>): Promise<CheckResult> {
     return this.call("/api/updates/check", {
       method: "POST",
-      body: { companyId, selected, installed, appVersion: appVersion() },
+      body: { companyIds, selected, installed, appVersion: appVersion() },
     });
   }
 

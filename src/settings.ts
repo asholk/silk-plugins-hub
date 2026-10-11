@@ -1,6 +1,7 @@
 export interface HubSettings {
   serverUrl: string;
-  companyId: number | null;
+  /** Companies this vault is connected to; their plugin lists are merged. */
+  companyIds: number[];
   /** Plugin ids the user chose for this vault. Required plugins are always included by the server. */
   selected: string[];
   autoUpdate: boolean;
@@ -13,7 +14,7 @@ export interface HubSettings {
 
 export const DEFAULT_SETTINGS: HubSettings = {
   serverUrl: "",
-  companyId: null,
+  companyIds: [],
   selected: [],
   autoUpdate: false,
   checkIntervalHours: 6,
@@ -47,6 +48,8 @@ export interface CatalogPlugin {
   description: string;
   instructions: string;
   required: boolean;
+  /** Connected companies that offer this plugin. */
+  companies: number[];
   hasCard: boolean;
   hasGuide: boolean;
   latest: ReleaseInfo | null;

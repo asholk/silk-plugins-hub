@@ -48,7 +48,12 @@ export default class SilkPluginsHub extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, (await this.loadData()) as Partial<HubSettings> | null);
+    const data = ((await this.loadData()) ?? {}) as Partial<HubSettings> & { companyId?: number | null };
+    // Earlier versions kept a single company.
+    if (!data.companyIds && typeof data.companyId === "number") data.companyIds = [data.companyId];
+    delete data.companyId;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+    this.settings.companyIds = [...this.settings.companyIds];
   }
 
   async saveSettings(): Promise<void> {
@@ -88,7 +93,7 @@ export default class SilkPluginsHub extends Plugin {
       await this.client.exchangeCode(code, pending.verifier);
       const me = await this.client.me();
       this.settings.accountEmail = me.user.email;
-      if (me.companies.length === 1) this.settings.companyId = me.companies[0].id;
+      if (me.companies.length === 1 && this.settings.companyIds.length === 0) this.settings.companyIds = [me.companies[0].id];
       await this.saveSettings();
       new Notice(t("signInDone", { email: me.user.email }));
       this.openSettings();
