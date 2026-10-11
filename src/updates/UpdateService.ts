@@ -143,6 +143,11 @@ export class UpdateService {
     if (this.pending.length > 0) new UpdatesModal(this.plugin.app, this, this.pending).open();
   }
 
+  /** Forgets pending updates, e.g. after the vault is disconnected from the company. */
+  reset(): void {
+    this.setPending([]);
+  }
+
   private setPending(updates: PluginUpdate[]): void {
     this.pending = updates;
     this.plugin.updateStatusBar(updates.length);

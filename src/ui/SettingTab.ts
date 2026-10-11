@@ -77,8 +77,8 @@ export class HubSettingTab extends PluginSettingTab {
     };
     showDesc(current ? t("companyConnected", { name: current.name }) : t("companyCodeDesc"));
 
-    let input: TextComponent;
-    let button: ButtonComponent;
+    let input!: TextComponent;
+    let button!: ButtonComponent;
     const connect = async () => {
       const code = input.getValue().trim();
       if (!code) return showDesc(t("companyCodeDesc"), true);
@@ -100,16 +100,54 @@ export class HubSettingTab extends PluginSettingTab {
     setting
       .addText((text) => {
         input = text;
-        text.setPlaceholder(t("companyCodePlaceholder")).setValue(current?.slug ?? "");
+        // With a single company the code is suggested, but the user connects explicitly (and can disconnect).
+        const suggested = current ?? (companies.length === 1 ? companies[0] : null);
+        text.setPlaceholder(t("companyCodePlaceholder")).setValue(suggested?.slug ?? "");
+        text.setDisabled(current !== null);
         text.inputEl.addEventListener("keydown", (e) => {
           if (e.key === "Enter") void connect();
         });
       })
       .addButton((b) => {
         button = b;
-        b.setButtonText(t("connect")).onClick(() => void connect());
-        if (!current) b.setCta();
+        b.setButtonText(t("connect")).setCta().onClick(() => void connect());
       });
+    if (current) {
+      button.buttonEl.hide();
+      this.addDisconnect(setting);
+    }
+  }
+
+  /**
+   * Disconnects the vault from the company, confirmed on the button itself like uninstalling a plugin.
+   * Installed plugins stay; they just stop getting updates from the hub.
+   */
+  private addDisconnect(setting: Setting): void {
+    const { plugin } = this;
+    let armed = false;
+    let timer: number | null = null;
+    setting.addButton((b) =>
+      b.setButtonText(t("disconnect")).onClick(async () => {
+        if (!armed) {
+          armed = true;
+          b.setButtonText(t("disconnectConfirm")).setWarning();
+          timer = window.setTimeout(() => {
+            armed = false;
+            b.buttonEl.removeClass("mod-warning");
+            b.setButtonText(t("disconnect"));
+          }, 4000);
+          return;
+        }
+        if (timer !== null) window.clearTimeout(timer);
+        plugin.settings.companyId = null;
+        plugin.settings.selected = [];
+        plugin.settings.skipped = {};
+        await plugin.saveSettings();
+        plugin.updates.reset();
+        new Notice(t("disconnected"));
+        void this.render();
+      }),
+    );
   }
 
   private renderGuide(containerEl: HTMLElement, open: boolean): void {
@@ -184,10 +222,6 @@ export class HubSettingTab extends PluginSettingTab {
       const me = await client.me();
       companies = me.companies;
       if (settings.companyId !== null && !companies.some((c) => c.id === settings.companyId)) settings.companyId = null;
-      if (settings.companyId === null && companies.length === 1) {
-        settings.companyId = companies[0].id;
-        await plugin.saveSettings();
-      }
       if (settings.companyId !== null) catalog = await client.catalog(settings.companyId);
     } catch (err) {
       if (renderId !== this.renderId) return;
