@@ -27,15 +27,21 @@ export class Installer {
     return normalizePath(`${this.app.vault.configDir}/plugins/${id}`);
   }
 
-  async installedVersion(id: string): Promise<string | null> {
+  /** Name and version from the installed manifest.json, or null if the plugin isn't installed. */
+  async installedManifest(id: string): Promise<{ name: string; version: string } | null> {
     const file = `${this.pluginDir(id)}/manifest.json`;
     const adapter = this.app.vault.adapter;
     if (!(await adapter.exists(file))) return null;
     try {
-      return (JSON.parse(await adapter.read(file)) as { version?: string }).version ?? null;
+      const manifest = JSON.parse(await adapter.read(file)) as { name?: string; version?: string };
+      return manifest.version ? { name: manifest.name ?? id, version: manifest.version } : null;
     } catch {
       return null;
     }
+  }
+
+  async installedVersion(id: string): Promise<string | null> {
+    return (await this.installedManifest(id))?.version ?? null;
   }
 
   async installedVersions(ids: Iterable<string>): Promise<Record<string, string>> {

@@ -134,36 +134,48 @@ export default class SilkPluginsHub extends Plugin {
   }
 
   private async chooseRollback(): Promise<void> {
-    const candidates = await this.installer.pluginsWithBackup();
+    const candidates: RollbackCandidate[] = [];
+    for (const id of await this.installer.pluginsWithBackup()) {
+      const installed = await this.installer.installedManifest(id);
+      candidates.push({ id, name: installed?.name ?? id, version: installed?.version ?? "" });
+    }
     if (candidates.length === 0) return void new Notice(t("rollbackNone"));
     new RollbackModal(this, candidates).open();
   }
 }
 
-class RollbackModal extends SuggestModal<string> {
+interface RollbackCandidate {
+  id: string;
+  name: string;
+  version: string;
+}
+
+class RollbackModal extends SuggestModal<RollbackCandidate> {
   constructor(
     private plugin: SilkPluginsHub,
-    private ids: string[],
+    private candidates: RollbackCandidate[],
   ) {
     super(plugin.app);
     this.setPlaceholder(t("rollback"));
   }
 
-  getSuggestions(query: string): string[] {
-    return this.ids.filter((id) => id.includes(query.toLowerCase()));
+  getSuggestions(query: string): RollbackCandidate[] {
+    const q = query.toLowerCase();
+    return this.candidates.filter((c) => c.name.toLowerCase().includes(q) || c.id.includes(q));
   }
 
-  renderSuggestion(id: string, el: HTMLElement): void {
-    el.setText(id);
+  renderSuggestion(c: RollbackCandidate, el: HTMLElement): void {
+    el.createDiv({ text: c.name });
+    el.createEl("small", { cls: "silk-hub-muted", text: c.version ? `${c.id} · ${c.version}` : c.id });
   }
 
-  onChooseSuggestion(id: string): void {
+  onChooseSuggestion(c: RollbackCandidate): void {
     void (async () => {
       try {
-        const version = await this.plugin.installer.rollback(id);
-        new Notice(version ? t("rollbackDone", { name: id, version }) : t("rollbackNone"));
+        const version = await this.plugin.installer.rollback(c.id);
+        new Notice(version ? t("rollbackDone", { name: c.name, version }) : t("rollbackNone"));
       } catch (err) {
-        new Notice(t("installFailed", { name: id, error: (err as Error).message }));
+        new Notice(t("installFailed", { name: c.name, error: (err as Error).message }));
       }
     })();
   }
