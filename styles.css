@@ -337,3 +337,79 @@
 .is-phone .silk-hub-actions .setting-item-control {
   justify-content: flex-start;
 }
+
+/* Install button while the plugin is queued or being installed */
+.silk-hub-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  position: relative;
+  overflow: hidden;
+}
+
+.silk-hub-busy:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+.silk-hub-busy-icon {
+  display: flex;
+}
+
+.silk-hub-busy-icon svg {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}
+
+.silk-hub-busy.is-running .silk-hub-busy-icon svg {
+  animation: silk-hub-spin 0.9s linear infinite;
+}
+
+/* A stripe running along the bottom edge */
+.silk-hub-busy.is-running::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 35%;
+  height: 2px;
+  background: var(--interactive-accent);
+  animation: silk-hub-stripe 1.2s ease-in-out infinite;
+}
+
+.silk-hub-busy.is-queued {
+  color: var(--text-muted);
+}
+
+.silk-hub-busy.is-queued .silk-hub-busy-icon {
+  animation: silk-hub-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes silk-hub-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes silk-hub-stripe {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes silk-hub-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .silk-hub-busy.is-running .silk-hub-busy-icon svg,
+  .silk-hub-busy.is-running::after,
+  .silk-hub-busy.is-queued .silk-hub-busy-icon {
+    animation: none;
+  }
+}

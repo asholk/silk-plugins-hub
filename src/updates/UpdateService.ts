@@ -1,6 +1,6 @@
 import { Notice, Platform } from "obsidian";
 import { uninstallPlugin } from "../install/communityPlugins";
-import { IncompatibleError } from "../install/Installer";
+import { IncompatibleError, InstallStage } from "../install/Installer";
 import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
 import { devLog } from "../devLog";
@@ -98,7 +98,10 @@ export class UpdateService {
           const progress = new Notice(t("installing", { name: update.name }), 0);
           try {
             return await devLog.step(`install ${update.id} ${update.installedVersion ?? "-"} → ${update.version}`, () =>
-              plugin.installer.install(update, { enable: plugin.enableAfterInstall }),
+              plugin.installer.install(update, {
+                enable: plugin.enableAfterInstall,
+                onStage: (stage) => plugin.queue.setLabel(update.id, stageLabel(stage, !!update.installedVersion)),
+              }),
             );
           } finally {
             progress.hide();
@@ -197,4 +200,11 @@ export class UpdateService {
     notice.messageEl.addClass("silk-hub-clickable");
     notice.messageEl.addEventListener("click", () => void this.plugin.openChangelog());
   }
+}
+
+/** Text on the plugin's button for a stage of installing it. */
+function stageLabel(stage: InstallStage, update: boolean): string {
+  if (stage === "downloading") return t("stageDownloading");
+  if (stage === "starting") return t("stageStarting");
+  return update ? t("updating") : t("installingShort");
 }

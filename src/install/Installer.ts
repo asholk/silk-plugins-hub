@@ -13,6 +13,9 @@ const BACKUP_DIR = ".hub-backup";
 /** The release can't run here: it's desktop-only on a phone, or needs a newer Obsidian. */
 export class IncompatibleError extends Error {}
 
+/** Stages of install() that the settings page shows on the plugin's button. */
+export type InstallStage = "downloading" | "installing" | "starting";
+
 /** What install() did: the files are in place, and whether the plugin is running. */
 export interface InstallResult {
   enabled: boolean;
@@ -71,11 +74,15 @@ export class Installer {
    * a fresh install that doesn't start stays installed and turned off ({ enabled: false }).
    * `enable: false` installs a new plugin without turning it on.
    */
-  async install(update: PluginUpdate, { enable = true }: { enable?: boolean } = {}): Promise<InstallResult> {
+  async install(
+    update: PluginUpdate,
+    { enable = true, onStage }: { enable?: boolean; onStage?: (stage: InstallStage) => void } = {},
+  ): Promise<InstallResult> {
     if (!/^[a-z0-9][a-z0-9-]*$/.test(update.id)) throw new Error(`invalid plugin id ${update.id}`);
     if (!this.manages(update.id)) throw new Error(`${update.id} updates only through Obsidian`);
 
     // Download and verify everything before touching the plugin folder.
+    onStage?.("downloading");
     const files = new Map<string, ArrayBuffer>();
     for (const asset of update.assets) {
       if (!PLUGIN_FILES.includes(asset.name)) continue;
@@ -100,6 +107,7 @@ export class Installer {
       throw new IncompatibleError(t("needsNewerApp", { version: manifest.minAppVersion }));
     }
 
+    onStage?.("installing");
     const dir = this.pluginDir(update.id);
     const adapter = this.app.vault.adapter;
     const wasInstalled = await adapter.exists(`${dir}/manifest.json`);
@@ -115,6 +123,11 @@ export class Installer {
         const path = `${dir}/${name}`;
         if (data) await devLog.step(`write ${update.id}/${name}`, () => adapter.writeBinary(path, data));
         else if (await adapter.exists(path)) await adapter.remove(path);
+      }
+      if (onStage && (wasRunning || (!wasInstalled && enable))) {
+        onStage("starting");
+        // Let "Starting…" reach the screen: a heavy plugin blocks drawing while it loads.
+        await new Promise((resolve) => window.setTimeout(resolve, 50));
       }
       started = await startPlugin(this.app, update.id, wasRunning ? "restart" : wasInstalled || !enable ? "none" : "enable");
     } catch (err) {

@@ -66,6 +66,13 @@ export class OperationQueue {
     return promise as Promise<T>;
   }
 
+  /** Changes what the running operation on this plugin shows, e.g. "Downloading…" → "Installing…". */
+  setLabel(id: string, label: string): void {
+    if (this.current?.id !== id || this.current.label === label) return;
+    this.current.label = label;
+    this.changed();
+  }
+
   /** Called on every change of the queue; returns a function that unsubscribes. */
   onChange(listener: () => void): () => void {
     this.listeners.add(listener);

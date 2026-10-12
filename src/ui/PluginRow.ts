@@ -1,4 +1,4 @@
-import { ButtonComponent, Notice, Platform, Setting } from "obsidian";
+import { ButtonComponent, Notice, Platform, Setting, setIcon } from "obsidian";
 import { devLog } from "../devLog";
 import { t } from "../i18n";
 import { EnableError, isPluginEnabled, setPluginEnabled } from "../install/communityPlugins";
@@ -121,7 +121,14 @@ export class PluginRow {
     this.shownOperation = op ? `${op.running}:${op.label}` : "";
     const busy = op ? (op.running ? op.label : t("queued")) : this.starting;
     if (busy) {
-      setting.addButton((b) => b.setButtonText(busy).setDisabled(true));
+      // Queued plugins pulse quietly; the one being worked on spins and shows its stage.
+      const running = !op || op.running;
+      setting.addButton((b) => {
+        b.setDisabled(true);
+        b.buttonEl.addClass("silk-hub-busy", running ? "is-running" : "is-queued");
+        setIcon(b.buttonEl.createSpan({ cls: "silk-hub-busy-icon" }), running ? "loader-circle" : "clock");
+        b.buttonEl.createSpan({ text: busy });
+      });
       return;
     }
 
