@@ -3,6 +3,7 @@ import { uninstallPlugin } from "../install/communityPlugins";
 import { IncompatibleError } from "../install/Installer";
 import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
+import { devLog } from "../devLog";
 import type SilkPluginsHub from "../main";
 import type { PluginUpdate } from "../settings";
 import { UpdatesModal } from "../ui/UpdatesModal";
@@ -31,6 +32,7 @@ export class UpdateService {
       return;
     }
     this.running = true;
+    devLog.log(`update check started, interactive ${interactive}`);
     try {
       const catalog = await client.catalog(settings.companyIds);
       const candidates = new Set([...settings.selected, ...catalog.filter((p) => p.required).map((p) => p.id)]);
@@ -95,7 +97,9 @@ export class UpdateService {
         const result = await plugin.queue.run(update.id, label, async () => {
           const progress = new Notice(t("installing", { name: update.name }), 0);
           try {
-            return await plugin.installer.install(update, { enable: plugin.enableAfterInstall });
+            return await devLog.step(`install ${update.id} ${update.installedVersion ?? "-"} → ${update.version}`, () =>
+              plugin.installer.install(update, { enable: plugin.enableAfterInstall }),
+            );
           } finally {
             progress.hide();
           }
@@ -122,7 +126,9 @@ export class UpdateService {
     if (settings.companyIds.length === 0) return false;
     try {
       const installed = await installer.installedVersions([pluginId]);
-      const result = await client.checkUpdates(settings.companyIds, [pluginId], installed);
+      const result = await devLog.step(`check updates for ${pluginId}`, () =>
+        client.checkUpdates(settings.companyIds, [pluginId], installed),
+      );
       const update = result.updates.find((u) => u.id === pluginId);
       if (!update) {
         new Notice(t("upToDate"));

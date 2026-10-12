@@ -1,4 +1,5 @@
 import type { App, PluginManifest } from "obsidian";
+import { devLog } from "../devLog";
 
 /**
  * Obsidian has no public API for installing or reloading other plugins.
@@ -39,12 +40,13 @@ function isLoaded(app: App, id: string): boolean {
  */
 export async function setPluginEnabled(app: App, id: string, enabled: boolean): Promise<void> {
   const api = plugins(app);
-  if (!enabled) return api.disablePluginAndSave(id);
-  if (!api.manifests[id]) await api.loadManifests();
-  const ok = await api.enablePluginAndSave(id);
+  if (!enabled) return devLog.step(`disablePluginAndSave ${id}`, () => api.disablePluginAndSave(id));
+  if (!api.manifests[id]) await devLog.step("loadManifests", () => api.loadManifests());
+  const ok = await devLog.step(`enablePluginAndSave ${id}`, () => api.enablePluginAndSave(id));
+  devLog.log(`${id}: enable returned ${ok}, loaded ${isLoaded(app, id)}`);
   if (!ok || !isLoaded(app, id)) {
     // Obsidian may remember the choice even when the start failed; keep the switch truthful.
-    if (api.enabledPlugins.has(id)) await api.disablePluginAndSave(id);
+    if (api.enabledPlugins.has(id)) await devLog.step(`disablePluginAndSave ${id}`, () => api.disablePluginAndSave(id));
     throw new EnableError(id);
   }
 }
@@ -52,15 +54,16 @@ export async function setPluginEnabled(app: App, id: string, enabled: boolean): 
 /** Disables the plugin and deletes its folder, like Uninstall in Community plugins. */
 export async function uninstallPlugin(app: App, id: string): Promise<void> {
   const api = plugins(app);
-  if (!api.manifests[id]) await api.loadManifests();
-  await api.uninstallPlugin(id);
+  if (!api.manifests[id]) await devLog.step("loadManifests", () => api.loadManifests());
+  await devLog.step(`uninstallPlugin ${id}`, () => api.uninstallPlugin(id));
 }
 
 /** Stops a running plugin before its files change; returns whether it was running. */
 export async function stopPlugin(app: App, id: string): Promise<boolean> {
   const api = plugins(app);
   const running = api.enabledPlugins.has(id) || isLoaded(app, id);
-  if (running) await api.disablePlugin(id);
+  devLog.log(`${id}: running ${running}`);
+  if (running) await devLog.step(`disablePlugin ${id}`, () => api.disablePlugin(id));
   return running;
 }
 
@@ -71,10 +74,14 @@ export async function stopPlugin(app: App, id: string): Promise<boolean> {
  */
 export async function startPlugin(app: App, id: string, how: "restart" | "enable" | "none"): Promise<boolean> {
   const api = plugins(app);
-  await api.loadManifests();
+  await devLog.step("loadManifests", () => api.loadManifests());
   if (how === "none") return true;
-  const ok = how === "restart" ? await api.enablePlugin(id) : await api.enablePluginAndSave(id);
+  const ok =
+    how === "restart"
+      ? await devLog.step(`enablePlugin ${id}`, () => api.enablePlugin(id))
+      : await devLog.step(`enablePluginAndSave ${id}`, () => api.enablePluginAndSave(id));
+  devLog.log(`${id}: enable returned ${ok}, loaded ${isLoaded(app, id)}`);
   if (ok && isLoaded(app, id)) return true;
-  if (how === "enable" && api.enabledPlugins.has(id)) await api.disablePluginAndSave(id);
+  if (how === "enable" && api.enabledPlugins.has(id)) await devLog.step(`disablePluginAndSave ${id}`, () => api.disablePluginAndSave(id));
   return false;
 }

@@ -1,6 +1,7 @@
 import { Notice, Plugin, SuggestModal } from "obsidian";
 import { HubClient } from "./api/HubClient";
 import { createPendingSignIn, PendingSignIn } from "./api/pkce";
+import { devLog } from "./devLog";
 import { t } from "./i18n";
 import { Installer } from "./install/Installer";
 import { OperationQueue } from "./install/OperationQueue";
@@ -27,6 +28,8 @@ export default class SilkPluginsHub extends Plugin {
   private pendingSignIn: (PendingSignIn & { serverUrl: string }) | null = null;
 
   async onload(): Promise<void> {
+    devLog.init(this.app, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    devLog.log(`Silk Hub ${this.manifest.version} loading`);
     await this.loadSettings();
     this.client = new HubClient(this.app, () => this.settings.serverUrl, () => this.onSignedOut());
     this.installer = new Installer(this.app, this.client, this.manifest.id);
@@ -45,11 +48,30 @@ export default class SilkPluginsHub extends Plugin {
     this.addCommand({ id: "check-for-updates", name: t("checkNow"), callback: () => void this.updates.check(true) });
     this.addCommand({ id: "open-changelog", name: t("openChangelog"), callback: () => void this.openChangelog() });
     this.addCommand({ id: "rollback-plugin", name: t("rollback"), callback: () => void this.chooseRollback() });
+    this.addCommand({
+      id: "copy-debug-log",
+      name: t("copyDebugLog"),
+      checkCallback: (checking) => {
+        if (!devLog.enabled) return false;
+        if (!checking) void navigator.clipboard.writeText(devLog.text()).then(() => new Notice(t("debugLogCopied")));
+        return true;
+      },
+    });
+
+    // Errors from any plugin while developer mode is on: a plugin failing in onload() shows up here.
+    this.registerDomEvent(window, "error", (e) => devLog.log(`window error: ${e.message} at ${e.filename}:${e.lineno}`));
+    this.registerDomEvent(window, "unhandledrejection", (e) =>
+      devLog.log(`unhandled rejection: ${(e.reason as Error)?.message ?? String(e.reason)}`),
+    );
 
     this.app.workspace.onLayoutReady(() => {
       window.setTimeout(() => void this.updates.check(false), STARTUP_DELAY_MS);
       this.scheduleChecks();
     });
+  }
+
+  onunload(): void {
+    devLog.unload();
   }
 
   async loadSettings(): Promise<void> {

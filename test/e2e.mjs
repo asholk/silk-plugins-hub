@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import esbuild from "esbuild";
 
@@ -67,10 +68,11 @@ await esbuild.build({
   format: "esm",
   platform: "node",
   outfile: path.join(tmp, "community.mjs"),
+  alias: { obsidian: path.join(here, "fake-obsidian.js") },
   logLevel: "error",
 });
 const opened = [];
-globalThis.window = { setTimeout, clearTimeout, setInterval, clearInterval, open: (url) => opened.push(url) };
+globalThis.window = { setTimeout, clearTimeout, setInterval, clearInterval, open: (url) => opened.push(url), require: createRequire(import.meta.url) };
 const { default: Hub } = await import(pathToFileURL(bundle).href);
 const fake = await import(pathToFileURL(path.join(here, "fake-obsidian.js")).href);
 const { log, createApp } = fake;
@@ -252,6 +254,9 @@ try {
   };
   const ids = ["hub-a", "hub-b", "hub-c", "hub-d"];
   for (const id of ids) await simplePlugin(id, "1.0.0");
+  // Developer mode on for this step: every step lands in debug.log.
+  fs.mkdirSync(path.join(vault, ".obsidian/plugins/silk-plugins-hub"), { recursive: true });
+  await hub.settingTab.setControlValue("devMode", true);
   log.maxLoading = 0;
   log.pluginCalls.length = 0;
   const results = await Promise.all(ids.map((id) => hub.updates.installOne(id)));
@@ -263,6 +268,12 @@ try {
   ok(`4 плагина установлены по очереди: ${order.join(" → ")}`);
   assert.equal(await Promise.all([hub.queue.run("hub-a", "x", async () => 1), hub.queue.run("hub-a", "y", async () => 2)]).then((r) => r.join()), "1,1");
   ok("повторное действие с тем же плагином ждёт уже запущенное, а не начинает второе");
+  await hub.settingTab.setControlValue("devMode", false);
+  const debugLog = fs.readFileSync(path.join(vault, ".obsidian/plugins/silk-plugins-hub/debug.log"), "utf8");
+  for (const line of ["▶ POST /api/updates/check", "▶ download hub-a/main.js", "▶ write hub-a/main.js", "✔ enablePluginAndSave hub-d", "queue: + hub-b", "developer mode off"]) {
+    assert.ok(debugLog.includes(line), `в журнале есть «${line}»`);
+  }
+  ok(`режим разработчика: ${debugLog.trim().split(/\r?\n/).length} строк в debug.log, каждый шаг с длительностью`);
 
   step("Плагин установился, но не запустился: так и сообщаем");
   await simplePlugin("hub-broken", "1.0.0");

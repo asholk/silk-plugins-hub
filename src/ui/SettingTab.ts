@@ -1,5 +1,6 @@
 import { App, ButtonComponent, Notice, PluginSettingTab, Setting, SettingDefinition, SettingDefinitionItem, TextComponent } from "obsidian";
 import { NotSignedInError } from "../api/HubClient";
+import { devLog } from "../devLog";
 import { t } from "../i18n";
 import type SilkPluginsHub from "../main";
 import type { CatalogPlugin, Company, HubSettings } from "../settings";
@@ -40,6 +41,7 @@ export class HubSettingTab extends PluginSettingTab {
 
   /** Reloads server data and redraws the tab, for example after signing in elsewhere. */
   refresh(): void {
+    devLog.log("settings: refresh");
     this.stale = true;
     this.update();
   }
@@ -52,6 +54,7 @@ export class HubSettingTab extends PluginSettingTab {
 
   getControlValue(key: string): unknown {
     if (key === "enableAfterInstall") return this.plugin.enableAfterInstall;
+    if (key === "devMode") return devLog.enabled;
     return this.plugin.settings[key as keyof HubSettings];
   }
 
@@ -59,6 +62,10 @@ export class HubSettingTab extends PluginSettingTab {
     const { settings } = this.plugin;
     if (key === "enableAfterInstall") {
       this.plugin.enableAfterInstall = Boolean(value);
+      return;
+    }
+    if (key === "devMode") {
+      devLog.setEnabled(Boolean(value));
       return;
     }
     if (key === "serverUrl") settings.serverUrl = String(value).trim();
@@ -70,6 +77,7 @@ export class HubSettingTab extends PluginSettingTab {
 
   getSettingDefinitions(): SettingDefinitionItem[] {
     const { settings, client } = this.plugin;
+    devLog.log(`settings: build definitions, data ${this.data.state}, stale ${this.stale}`);
     if (this.stale && client.signedIn) void this.load();
 
     const items: SettingDefinitionItem[] = [
@@ -130,6 +138,11 @@ export class HubSettingTab extends PluginSettingTab {
         },
       ],
     });
+    items.push({
+      type: "group",
+      heading: t("advanced"),
+      items: [{ name: t("devMode"), desc: t("devModeDesc"), control: { type: "toggle", key: "devMode" } }],
+    });
     return items;
   }
 
@@ -139,6 +152,7 @@ export class HubSettingTab extends PluginSettingTab {
     this.stale = false;
     const { settings, client, installer } = this.plugin;
     let next: HubData;
+    devLog.log(`settings: load #${id}`);
     try {
       const me = await client.me();
       if (settings.accountEmail !== me.user.email) {
@@ -157,9 +171,11 @@ export class HubSettingTab extends PluginSettingTab {
     } catch (err) {
       next = err instanceof NotSignedInError ? { state: "loading" } : { state: "error", message: (err as Error).message };
     }
-    if (id !== this.loadId) return;
+    if (id !== this.loadId) return devLog.log(`settings: load #${id} superseded`);
     this.data = next;
+    const startedAt = performance.now();
     this.update();
+    devLog.log(`settings: load #${id} ${next.state}, redrawn in ${Math.round(performance.now() - startedAt)}ms`);
   }
 
   private renderGuide(setting: Setting, open: boolean): void {

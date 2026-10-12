@@ -1,4 +1,5 @@
 import { ButtonComponent, Notice, Platform, Setting } from "obsidian";
+import { devLog } from "../devLog";
 import { t } from "../i18n";
 import { EnableError, isPluginEnabled, setPluginEnabled } from "../install/communityPlugins";
 import type SilkPluginsHub from "../main";
@@ -70,7 +71,10 @@ export class PluginRow {
     }
     const op = this.plugin.queue.get(this.p.id);
     const key = op ? `${op.running}:${op.label}` : "";
-    if (key !== this.shownOperation) this.renderControls();
+    if (key !== this.shownOperation) {
+      devLog.log(`row ${this.p.id}: ${key || "idle"}`);
+      this.renderControls();
+    }
   }
 
   private render(): void {
@@ -164,6 +168,7 @@ export class PluginRow {
   }
 
   private async install(): Promise<void> {
+    devLog.log(`row ${this.p.id}: ${this.version ? "Update" : "Install"} pressed`);
     this.starting = this.version ? t("updating") : t("installingShort");
     this.renderControls();
     await this.act(async () => {
@@ -176,6 +181,7 @@ export class PluginRow {
 
   private async setEnabled(value: boolean): Promise<void> {
     const { plugin, p } = this;
+    devLog.log(`row ${p.id}: switch turned ${value ? "on" : "off"}`);
     await this.act(() =>
       plugin.queue.run(p.id, value ? t("enabling") : t("disabling"), () => setPluginEnabled(plugin.app, p.id, value)),
     );
@@ -186,6 +192,7 @@ export class PluginRow {
     try {
       await action();
     } catch (err) {
+      devLog.log(`row ${this.p.id}: failed: ${(err as Error).message}`);
       if (err instanceof EnableError) new Notice(t("enableFailed", { name: this.p.name }), 10000);
       else new Notice(t("actionFailed", { name: this.p.name, error: (err as Error).message }), 10000);
     } finally {

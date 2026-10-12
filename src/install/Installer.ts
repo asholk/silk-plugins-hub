@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import type { PluginUpdate } from "../settings";
 import { compareVersions } from "../ui/changes";
 import { startPlugin, stopPlugin } from "./communityPlugins";
+import { devLog } from "../devLog";
 
 const PLUGIN_FILES = ["main.js", "manifest.json", "styles.css"];
 const BACKUP_DIR = ".hub-backup";
@@ -78,8 +79,8 @@ export class Installer {
     const files = new Map<string, ArrayBuffer>();
     for (const asset of update.assets) {
       if (!PLUGIN_FILES.includes(asset.name)) continue;
-      const data = await this.client.download(asset.url);
-      const hash = await sha256Hex(data);
+      const data = await devLog.step(`download ${update.id}/${asset.name}`, () => this.client.download(asset.url));
+      const hash = await devLog.step(`sha256 ${asset.name} ${data.byteLength} bytes`, () => sha256Hex(data));
       if (hash !== asset.sha256) throw new Error(`checksum mismatch for ${asset.name}`);
       files.set(asset.name, data);
     }
@@ -102,8 +103,9 @@ export class Installer {
     const dir = this.pluginDir(update.id);
     const adapter = this.app.vault.adapter;
     const wasInstalled = await adapter.exists(`${dir}/manifest.json`);
+    devLog.log(`${update.id}: installed before ${wasInstalled}, enable ${enable}`);
     const wasRunning = await stopPlugin(this.app, update.id);
-    if (wasInstalled) await this.backup(dir);
+    if (wasInstalled) await devLog.step(`backup ${update.id}`, () => this.backup(dir));
     else if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
 
     let started: boolean;
@@ -111,7 +113,7 @@ export class Installer {
       for (const name of PLUGIN_FILES) {
         const data = files.get(name);
         const path = `${dir}/${name}`;
-        if (data) await adapter.writeBinary(path, data);
+        if (data) await devLog.step(`write ${update.id}/${name}`, () => adapter.writeBinary(path, data));
         else if (await adapter.exists(path)) await adapter.remove(path);
       }
       started = await startPlugin(this.app, update.id, wasRunning ? "restart" : wasInstalled || !enable ? "none" : "enable");
@@ -122,12 +124,14 @@ export class Installer {
     if (started) return { enabled: wasRunning || (!wasInstalled && enable) };
     if (!wasRunning) return { enabled: false };
     // The update doesn't start: bring back the version that worked.
+    devLog.log(`${update.id}: the update didn't start, restoring the previous version`);
     await this.undo(update.id, dir, true, true);
     throw new Error(t("updateDidNotStart"));
   }
 
   /** Puts back the state from before install(): the previous files and running state, or no folder at all. */
   private async undo(id: string, dir: string, wasInstalled: boolean, wasRunning: boolean): Promise<void> {
+    devLog.log(`${id}: undo, installed before ${wasInstalled}, running before ${wasRunning}`);
     try {
       await stopPlugin(this.app, id);
       if (wasInstalled) await this.restore(dir);

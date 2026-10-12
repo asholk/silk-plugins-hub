@@ -1,3 +1,5 @@
+import { devLog } from "../devLog";
+
 /** What is happening to a plugin: waiting for its turn, or running now. */
 export interface Operation {
   label: string;
@@ -47,7 +49,10 @@ export class OperationQueue {
    */
   run<T>(id: string, label: string, task: () => Promise<T>): Promise<T> {
     const existing = this.pending(id);
-    if (existing) return existing as Promise<T>;
+    if (existing) {
+      devLog.log(`queue: ${id} already queued, joining`);
+      return existing as Promise<T>;
+    }
     let resolve!: (value: unknown) => void;
     let reject!: (reason: unknown) => void;
     const promise = new Promise<unknown>((res, rej) => {
@@ -55,6 +60,7 @@ export class OperationQueue {
       reject = rej;
     });
     this.jobs.push({ id, label, task, promise, resolve, reject });
+    devLog.log(`queue: + ${id} "${label}", waiting ${this.jobs.length}, running ${this.current?.id ?? "nothing"}`);
     this.changed();
     if (!this.draining) void this.drain();
     return promise as Promise<T>;
@@ -75,7 +81,7 @@ export class OperationQueue {
       // Let the "queued" state reach the screen before the heavy work starts.
       await breathe();
       try {
-        job.resolve(await job.task());
+        job.resolve(await devLog.step(`job ${job.id} "${job.label}"`, job.task));
       } catch (err) {
         job.reject(err);
       }
@@ -87,6 +93,7 @@ export class OperationQueue {
   }
 
   private changed(): void {
+    const startedAt = performance.now();
     for (const listener of [...this.listeners]) {
       try {
         listener();
@@ -94,6 +101,7 @@ export class OperationQueue {
         console.error("Silk Hub: queue listener failed", err);
       }
     }
+    devLog.log(`queue: notified ${this.listeners.size} listeners in ${Math.round(performance.now() - startedAt)}ms`);
   }
 }
 

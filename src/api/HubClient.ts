@@ -1,5 +1,6 @@
 import { apiVersion, App, requestUrl, RequestUrlResponse } from "obsidian";
 import type { CatalogPlugin, CheckResult, Company, ReleaseInfo } from "../settings";
+import { devLog } from "../devLog";
 
 const REFRESH_SECRET = "silk-plugins-hub-session";
 
@@ -137,6 +138,7 @@ export class HubClient {
   }
 
   private async refresh(): Promise<string> {
+    devLog.log("refreshing the access token");
     const refreshToken = this.app.secretStorage.getSecret(REFRESH_SECRET);
     if (!refreshToken) throw new NotSignedInError();
     const res = await this.raw("/auth/refresh", { method: "POST", body: { refreshToken } });
@@ -167,14 +169,17 @@ export class HubClient {
     if (!this.serverUrl) throw new HubError("server address is not set");
     const headers: Record<string, string> = { Accept: "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
-    return requestUrl({
-      url: this.serverUrl + path,
-      method: opts.method ?? "GET",
-      headers,
-      contentType: opts.body === undefined ? undefined : "application/json",
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      throw: false,
-    });
+    const method = opts.method ?? "GET";
+    return devLog.step(`${method} ${path.split("?")[0]}`, () =>
+      requestUrl({
+        url: this.serverUrl + path,
+        method,
+        headers,
+        contentType: opts.body === undefined ? undefined : "application/json",
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        throw: false,
+      }),
+    );
   }
 }
 

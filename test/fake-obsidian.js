@@ -97,6 +97,15 @@ class Adapter {
   p(rel) {
     return path.join(this.root, rel);
   }
+  getBasePath() {
+    return this.root;
+  }
+  async write(rel, data) {
+    fs.writeFileSync(this.p(rel), data);
+  }
+  async append(rel, data) {
+    fs.appendFileSync(this.p(rel), data);
+  }
   async exists(rel) {
     return fs.existsSync(this.p(rel));
   }
@@ -221,6 +230,7 @@ export class Plugin {
   registerInterval(id) {
     return id;
   }
+  registerDomEvent() {}
   registerObsidianProtocolHandler(action, fn) {
     this.protocolHandlers[action] = fn;
   }
