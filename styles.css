@@ -216,6 +216,10 @@
   color: var(--color-orange);
 }
 
+.silk-hub-chip.mod-desktop {
+  color: var(--color-blue);
+}
+
 .silk-hub-info-modal {
   width: min(820px, 92vw);
 }

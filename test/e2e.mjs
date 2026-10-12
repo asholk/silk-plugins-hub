@@ -235,6 +235,101 @@ try {
   assert.deepEqual(hub.settings.selected, []);
   ok(lastNotice());
 
+  step("Несколько плагинов сразу: ставятся по очереди, а не параллельно");
+  const simplePlugin = async (id, version, extra = {}) => {
+    if (!(await store.get("plugins", { id }))) {
+      await store.put("plugins", { id, name: `Plugin ${id}`, description: "", instructions: "" });
+      await store.put("company_plugins", { company_id: 1, plugin_id: id, required: false });
+    }
+    await storeRelease(ctx, id, {
+      tag: version,
+      notes: "",
+      files: {
+        "main.js": Buffer.from(`module.exports = class {}; // ${version}`),
+        "manifest.json": Buffer.from(JSON.stringify({ id, name: `Plugin ${id}`, version, minAppVersion: "1.0.0", ...extra })),
+      },
+    });
+  };
+  const ids = ["hub-a", "hub-b", "hub-c", "hub-d"];
+  for (const id of ids) await simplePlugin(id, "1.0.0");
+  log.maxLoading = 0;
+  log.pluginCalls.length = 0;
+  const results = await Promise.all(ids.map((id) => hub.updates.installOne(id)));
+  assert.deepEqual(results, [true, true, true, true]);
+  assert.equal(log.maxLoading, 1, "одновременно загружается только один плагин");
+  for (const id of ids) assert.ok(app.plugins.plugins[id] && app.plugins.enabledPlugins.has(id), `${id} включён`);
+  const order = log.pluginCalls.filter((c) => c.startsWith("enableAndSave:")).map((c) => c.split(":")[1]);
+  assert.deepEqual(order, ids);
+  ok(`4 плагина установлены по очереди: ${order.join(" → ")}`);
+  assert.equal(await Promise.all([hub.queue.run("hub-a", "x", async () => 1), hub.queue.run("hub-a", "y", async () => 2)]).then((r) => r.join()), "1,1");
+  ok("повторное действие с тем же плагином ждёт уже запущенное, а не начинает второе");
+
+  step("Плагин установился, но не запустился: так и сообщаем");
+  await simplePlugin("hub-broken", "1.0.0");
+  app.plugins.failEnable.add("hub-broken");
+  assert.equal(await hub.updates.installOne("hub-broken"), true);
+  assert.ok(fs.existsSync(path.join(vault, ".obsidian/plugins/hub-broken/main.js")), "файлы на месте");
+  assert.ok(!app.plugins.enabledPlugins.has("hub-broken"), "не отмечен включённым");
+  assert.match(lastNotice(), /установлен, но не запустился/);
+  ok(lastNotice());
+  const { setPluginEnabled: setEnabled2, EnableError } = await import(pathToFileURL(path.join(tmp, "community.mjs")).href);
+  await assert.rejects(setEnabled2(app, "hub-broken", true), EnableError);
+  assert.ok(!app.plugins.enabledPlugins.has("hub-broken"));
+  ok("переключатель сообщает об ошибке и остаётся выключенным");
+
+  step("Обновление не запустилось: возвращается прежняя версия");
+  await simplePlugin("hub-a", "1.1.0");
+  app.plugins.failEnable.add("hub-a");
+  hub.settings.selected = [...new Set([...hub.settings.selected, "hub-a"])];
+  assert.equal(await hub.updates.installOne("hub-a"), false);
+  app.plugins.failEnable.delete("hub-a");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(vault, ".obsidian/plugins/hub-a/manifest.json"), "utf8")).version, "1.0.0");
+  assert.match(lastNotice(), /новая версия не запустилась, возвращена прежняя/);
+  ok(lastNotice());
+
+  step("Новый плагин, который не удалось записать, не остаётся наполовину");
+  await simplePlugin("hub-half", "1.0.0");
+  const writeBinary = app.vault.adapter.writeBinary;
+  app.vault.adapter.writeBinary = async (rel, data) => {
+    if (rel.endsWith("manifest.json")) throw new Error("disk full");
+    return writeBinary.call(app.vault.adapter, rel, data);
+  };
+  assert.equal(await hub.updates.installOne("hub-half"), false);
+  app.vault.adapter.writeBinary = writeBinary;
+  assert.ok(!fs.existsSync(path.join(vault, ".obsidian/plugins/hub-half")), "папка убрана");
+  ok("папка неудачной установки удалена");
+
+  step("Телефон: плагины только для компьютера не ставятся");
+  await simplePlugin("hub-desk", "1.0.0", { isDesktopOnly: true });
+  const deskCatalog = await hub.client.catalog([1]);
+  assert.equal(deskCatalog.find((p) => p.id === "hub-desk").latest.desktopOnly, true);
+  assert.ok(deskCatalog.find((p) => p.id === "hub-a").latest.size > 0);
+  fake.Platform.isDesktopApp = false;
+  assert.equal(await hub.updates.installOne("hub-desk"), false);
+  assert.match(lastNotice(), /только в приложении для компьютера/);
+  assert.ok(!fs.existsSync(path.join(vault, ".obsidian/plugins/hub-desk")));
+  ok(lastNotice());
+
+  step("Телефон: установка без включения");
+  hub.enableAfterInstall = false;
+  await simplePlugin("hub-later", "1.0.0");
+  assert.equal(await hub.updates.installOne("hub-later"), true);
+  assert.ok(fs.existsSync(path.join(vault, ".obsidian/plugins/hub-later/main.js")));
+  assert.ok(!app.plugins.enabledPlugins.has("hub-later"));
+  assert.match(lastNotice(), /Включите его переключателем/);
+  assert.equal(JSON.stringify(hub.data).includes("enableAfterInstall"), false, "настройка не попадает в data.json");
+  ok(lastNotice());
+  hub.enableAfterInstall = true;
+  fake.Platform.isDesktopApp = true;
+
+  step("Параллельные запросы при истёкшем токене: одно обновление, пользователь не выходит");
+  hub.client.accessToken = null;
+  hub.client.accessExpiresAt = 0;
+  const parallel = await Promise.all([hub.client.me(), hub.client.me(), hub.client.catalog([1]), hub.client.me()]);
+  assert.equal(parallel[0].user.email, "user@example.com");
+  assert.ok(hub.client.signedIn, "сессия жива");
+  ok("четыре запроса, одно обновление токена, вход сохранён");
+
   step("Выход");
   await hub.signOut();
   assert.equal(app.secretStorage.getSecret("silk-plugins-hub-session"), null);

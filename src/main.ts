@@ -3,6 +3,7 @@ import { HubClient } from "./api/HubClient";
 import { createPendingSignIn, PendingSignIn } from "./api/pkce";
 import { t } from "./i18n";
 import { Installer } from "./install/Installer";
+import { OperationQueue } from "./install/OperationQueue";
 import { DEFAULT_SETTINGS, HubSettings } from "./settings";
 import { CHANGELOG_VIEW, ChangelogView } from "./ui/ChangelogView";
 import { HubSettingTab } from "./ui/SettingTab";
@@ -10,12 +11,16 @@ import { UpdateService } from "./updates/UpdateService";
 
 const SIGN_IN_TTL_MS = 10 * 60 * 1000;
 const STARTUP_DELAY_MS = 10 * 1000;
+/** Per-device choice, kept out of data.json so a synced vault doesn't carry it to other devices. */
+const ENABLE_AFTER_INSTALL_KEY = "silk-hub-enable-after-install";
 
 export default class SilkPluginsHub extends Plugin {
   settings!: HubSettings;
   client!: HubClient;
   installer!: Installer;
   updates!: UpdateService;
+  /** Installs, updates, switches and removals, one plugin at a time. */
+  readonly queue = new OperationQueue();
   private settingTab!: HubSettingTab;
   private statusBarEl: HTMLElement | null = null;
   private checkTimer: number | null = null;
@@ -67,6 +72,15 @@ export default class SilkPluginsHub extends Plugin {
       this.checkTimer = window.setInterval(() => void this.updates.check(false), this.settings.checkIntervalHours * 3600 * 1000);
       this.registerInterval(this.checkTimer);
     }
+  }
+
+  /** Whether a newly installed plugin is turned on right away; set per device. */
+  get enableAfterInstall(): boolean {
+    return this.app.loadLocalStorage(ENABLE_AFTER_INSTALL_KEY) !== "false";
+  }
+
+  set enableAfterInstall(value: boolean) {
+    this.app.saveLocalStorage(ENABLE_AFTER_INSTALL_KEY, value ? null : "false");
   }
 
   updateStatusBar(count: number): void {
@@ -196,10 +210,10 @@ class RollbackModal extends SuggestModal<RollbackCandidate> {
   onChooseSuggestion(c: RollbackCandidate): void {
     void (async () => {
       try {
-        const version = await this.plugin.installer.rollback(c.id);
+        const version = await this.plugin.queue.run(c.id, t("rollingBack"), () => this.plugin.installer.rollback(c.id));
         new Notice(version ? t("rollbackDone", { name: c.name, version }) : t("rollbackNone"));
       } catch (err) {
-        new Notice(t("installFailed", { name: c.name, error: (err as Error).message }));
+        new Notice(t("actionFailed", { name: c.name, error: (err as Error).message }));
       }
     })();
   }

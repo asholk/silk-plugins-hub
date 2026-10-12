@@ -5,7 +5,9 @@ import path from "node:path";
 
 export const apiVersion = "1.14.4";
 // Shared through globalThis: the plugin bundle inlines its own copy of this module.
-export const log = (globalThis.__fakeObsidianLog ??= { notices: [], modals: [], opened: [], pluginCalls: [] });
+export const log = (globalThis.__fakeObsidianLog ??= { notices: [], modals: [], opened: [], pluginCalls: [], maxLoading: 0 });
+// Tests switch it to a phone with Platform.isDesktopApp = false.
+export const Platform = (globalThis.__fakePlatform ??= { isDesktopApp: true, isMobile: false });
 
 export const getLanguage = () => "ru";
 export const normalizePath = (p) => p.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
@@ -133,9 +135,22 @@ class Adapter {
 export function createApp(vaultDir) {
   const adapter = new Adapter(vaultDir);
   const secrets = new Map();
+  let loading = 0;
+  // Like Obsidian: reads main.js and runs onload(); ids in failEnable fail to start and return false.
+  const load = async (api, id) => {
+    loading++;
+    log.maxLoading = Math.max(log.maxLoading, loading);
+    await new Promise((r) => setTimeout(r, 20));
+    loading--;
+    if (api.failEnable.has(id) || !api.manifests[id]) return false;
+    api.plugins[id] = { id };
+    return true;
+  };
   const plugins = {
     manifests: {},
     enabledPlugins: new Set(),
+    plugins: {},
+    failEnable: new Set(),
     async loadManifests() {
       log.pluginCalls.push("loadManifests");
       const dir = path.join(vaultDir, ".obsidian/plugins");
@@ -146,29 +161,35 @@ export function createApp(vaultDir) {
     },
     async enablePluginAndSave(id) {
       log.pluginCalls.push(`enableAndSave:${id}`);
+      if (!(await load(this, id))) return false;
       this.enabledPlugins.add(id);
       return true;
     },
     async enablePlugin(id) {
       log.pluginCalls.push(`enable:${id}`);
-      this.enabledPlugins.add(id);
-      return true;
+      return load(this, id);
     },
     async disablePluginAndSave(id) {
       log.pluginCalls.push(`disableAndSave:${id}`);
       this.enabledPlugins.delete(id);
+      delete this.plugins[id];
     },
     async uninstallPlugin(id) {
       log.pluginCalls.push(`uninstall:${id}`);
       this.enabledPlugins.delete(id);
+      delete this.plugins[id];
+      delete this.manifests[id];
       fs.rmSync(path.join(vaultDir, ".obsidian/plugins", id), { recursive: true, force: true });
     },
     async disablePlugin(id) {
       log.pluginCalls.push(`disable:${id}`);
-      this.enabledPlugins.delete(id);
+      delete this.plugins[id];
     },
   };
+  const local = new Map();
   return {
+    loadLocalStorage: (key) => local.get(key) ?? null,
+    saveLocalStorage: (key, value) => (value === null ? local.delete(key) : local.set(key, value)),
     vault: { configDir: ".obsidian", adapter },
     secretStorage: {
       setSecret: (id, v) => secrets.set(id, v),

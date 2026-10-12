@@ -25,6 +25,11 @@ interface TokenResponse {
 export class HubClient {
   private accessToken: string | null = null;
   private accessExpiresAt = 0;
+  /**
+   * The refresh in progress. The server accepts each refresh token once, so parallel requests
+   * must share one refresh: a second one would send the already used token and sign the user out.
+   */
+  private refreshing: Promise<string> | null = null;
 
   constructor(
     private app: App,
@@ -114,7 +119,8 @@ export class HubClient {
     let token = await this.getAccessToken();
     let res = await this.raw(path, opts, token);
     if (res.status === 401) {
-      this.accessToken = null;
+      // Another request may have refreshed the token meanwhile; drop only the one that failed.
+      if (this.accessToken === token) this.accessToken = null;
       token = await this.getAccessToken();
       res = await this.raw(path, opts, token);
     }
@@ -124,8 +130,13 @@ export class HubClient {
     return res.json as T;
   }
 
-  private async getAccessToken(): Promise<string> {
-    if (this.accessToken && Date.now() < this.accessExpiresAt) return this.accessToken;
+  private getAccessToken(): Promise<string> {
+    if (this.accessToken && Date.now() < this.accessExpiresAt) return Promise.resolve(this.accessToken);
+    this.refreshing ??= this.refresh().finally(() => (this.refreshing = null));
+    return this.refreshing;
+  }
+
+  private async refresh(): Promise<string> {
     const refreshToken = this.app.secretStorage.getSecret(REFRESH_SECRET);
     if (!refreshToken) throw new NotSignedInError();
     const res = await this.raw("/auth/refresh", { method: "POST", body: { refreshToken } });

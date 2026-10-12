@@ -1,15 +1,26 @@
-import { App, normalizePath } from "obsidian";
+import { apiVersion, App, normalizePath, Platform } from "obsidian";
 import type { HubClient } from "../api/HubClient";
 import { sha256Hex } from "../api/pkce";
+import { t } from "../i18n";
 import type { PluginUpdate } from "../settings";
-import { reloadPlugin } from "./communityPlugins";
+import { compareVersions } from "../ui/changes";
+import { startPlugin, stopPlugin } from "./communityPlugins";
 
 const PLUGIN_FILES = ["main.js", "manifest.json", "styles.css"];
 const BACKUP_DIR = ".hub-backup";
 
+/** The release can't run here: it's desktop-only on a phone, or needs a newer Obsidian. */
+export class IncompatibleError extends Error {}
+
+/** What install() did: the files are in place, and whether the plugin is running. */
+export interface InstallResult {
+  enabled: boolean;
+}
+
 /**
  * Downloads, verifies and installs plugin releases into the vault's plugins folder, keeping one backup for rollback.
  * Silk Hub itself is never installed or rolled back this way: it updates only through Obsidian.
+ * Callers run these methods through the OperationQueue, one plugin at a time.
  */
 export class Installer {
   constructor(
@@ -53,7 +64,13 @@ export class Installer {
     return result;
   }
 
-  async install(update: PluginUpdate): Promise<void> {
+  /**
+   * Installs or updates a plugin. A running plugin is stopped before its files change and restarted after.
+   * If the new version can't be written or doesn't start, the previous files and state come back and this throws;
+   * a fresh install that doesn't start stays installed and turned off ({ enabled: false }).
+   * `enable: false` installs a new plugin without turning it on.
+   */
+  async install(update: PluginUpdate, { enable = true }: { enable?: boolean } = {}): Promise<InstallResult> {
     if (!/^[a-z0-9][a-z0-9-]*$/.test(update.id)) throw new Error(`invalid plugin id ${update.id}`);
     if (!this.manages(update.id)) throw new Error(`${update.id} updates only through Obsidian`);
 
@@ -68,17 +85,28 @@ export class Installer {
     }
     const manifestData = files.get("manifest.json");
     if (!files.has("main.js") || !manifestData) throw new Error("release is missing main.js or manifest.json");
-    const manifest = JSON.parse(new TextDecoder().decode(manifestData)) as { id?: string; version?: string };
+    const manifest = JSON.parse(new TextDecoder().decode(manifestData)) as {
+      id?: string;
+      version?: string;
+      minAppVersion?: string;
+      isDesktopOnly?: boolean;
+    };
     if (manifest.id !== update.id || manifest.version !== update.version) {
       throw new Error("manifest does not match the release");
+    }
+    if (manifest.isDesktopOnly === true && !Platform.isDesktopApp) throw new IncompatibleError(t("desktopOnlyError"));
+    if (manifest.minAppVersion && compareVersions(manifest.minAppVersion, apiVersion) > 0) {
+      throw new IncompatibleError(t("needsNewerApp", { version: manifest.minAppVersion }));
     }
 
     const dir = this.pluginDir(update.id);
     const adapter = this.app.vault.adapter;
     const wasInstalled = await adapter.exists(`${dir}/manifest.json`);
+    const wasRunning = await stopPlugin(this.app, update.id);
     if (wasInstalled) await this.backup(dir);
     else if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
 
+    let started: boolean;
     try {
       for (const name of PLUGIN_FILES) {
         const data = files.get(name);
@@ -86,13 +114,27 @@ export class Installer {
         if (data) await adapter.writeBinary(path, data);
         else if (await adapter.exists(path)) await adapter.remove(path);
       }
-      await reloadPlugin(this.app, update.id, wasInstalled);
+      started = await startPlugin(this.app, update.id, wasRunning ? "restart" : wasInstalled || !enable ? "none" : "enable");
     } catch (err) {
-      if (wasInstalled) {
-        await this.restore(dir);
-        await reloadPlugin(this.app, update.id, true).catch(() => undefined);
-      }
+      await this.undo(update.id, dir, wasInstalled, wasRunning);
       throw err;
+    }
+    if (started) return { enabled: wasRunning || (!wasInstalled && enable) };
+    if (!wasRunning) return { enabled: false };
+    // The update doesn't start: bring back the version that worked.
+    await this.undo(update.id, dir, true, true);
+    throw new Error(t("updateDidNotStart"));
+  }
+
+  /** Puts back the state from before install(): the previous files and running state, or no folder at all. */
+  private async undo(id: string, dir: string, wasInstalled: boolean, wasRunning: boolean): Promise<void> {
+    try {
+      await stopPlugin(this.app, id);
+      if (wasInstalled) await this.restore(dir);
+      else if (await this.app.vault.adapter.exists(dir)) await this.app.vault.adapter.rmdir(dir, true);
+      await startPlugin(this.app, id, wasRunning ? "restart" : "none");
+    } catch (err) {
+      console.error(`Silk Hub: couldn't restore ${id}`, err);
     }
   }
 
@@ -101,8 +143,9 @@ export class Installer {
     if (!this.manages(id)) return null;
     const dir = this.pluginDir(id);
     if (!(await this.app.vault.adapter.exists(`${dir}/${BACKUP_DIR}/manifest.json`))) return null;
+    const wasRunning = await stopPlugin(this.app, id);
     await this.restore(dir);
-    await reloadPlugin(this.app, id, true);
+    if (!(await startPlugin(this.app, id, wasRunning ? "restart" : "none"))) throw new Error(t("rollbackDidNotStart"));
     return this.installedVersion(id);
   }
 

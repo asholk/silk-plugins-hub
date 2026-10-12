@@ -51,11 +51,16 @@ export class HubSettingTab extends PluginSettingTab {
   }
 
   getControlValue(key: string): unknown {
+    if (key === "enableAfterInstall") return this.plugin.enableAfterInstall;
     return this.plugin.settings[key as keyof HubSettings];
   }
 
   async setControlValue(key: string, value: unknown): Promise<void> {
     const { settings } = this.plugin;
+    if (key === "enableAfterInstall") {
+      this.plugin.enableAfterInstall = Boolean(value);
+      return;
+    }
     if (key === "serverUrl") settings.serverUrl = String(value).trim();
     else if (key === "autoUpdate") settings.autoUpdate = Boolean(value);
     else if (key === "checkIntervalHours") settings.checkIntervalHours = Number(value);
@@ -102,6 +107,7 @@ export class HubSettingTab extends PluginSettingTab {
       heading: t("updates"),
       items: [
         { name: t("autoUpdate"), desc: t("autoUpdateDesc"), control: { type: "toggle", key: "autoUpdate" } },
+        { name: t("enableAfterInstall"), desc: t("enableAfterInstallDesc"), control: { type: "toggle", key: "enableAfterInstall" } },
         {
           name: t("checkInterval"),
           desc: t("checkIntervalDesc"),
@@ -345,7 +351,7 @@ export class HubSettingTab extends PluginSettingTab {
               return {
                 name: p.name,
                 aliases: [p.id, p.description],
-                render: (s: Setting) => void new PluginRow(plugin, s, p, installed[p.id] ?? null, companyNames),
+                render: (s: Setting) => void new PluginRow(plugin, s, p, installed, companyNames),
               };
             }),
     };

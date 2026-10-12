@@ -7,6 +7,8 @@ import type { App, PluginManifest } from "obsidian";
 interface PluginsInternal {
   manifests: Record<string, PluginManifest>;
   enabledPlugins: Set<string>;
+  /** Loaded plugin instances by id. */
+  plugins: Record<string, unknown>;
   loadManifests(): Promise<void>;
   enablePluginAndSave(id: string): Promise<boolean>;
   disablePluginAndSave(id: string): Promise<void>;
@@ -19,14 +21,32 @@ function plugins(app: App): PluginsInternal {
   return (app as unknown as { plugins: PluginsInternal }).plugins;
 }
 
+/** Obsidian couldn't start the plugin: its onload() failed, or it doesn't run on this device. */
+export class EnableError extends Error {}
+
 export function isPluginEnabled(app: App, id: string): boolean {
   return plugins(app).enabledPlugins.has(id);
 }
 
-/** Turns a plugin on or off and remembers the choice, like the switch in Community plugins. */
+/** Whether Obsidian actually runs the plugin now. */
+function isLoaded(app: App, id: string): boolean {
+  return !!plugins(app).plugins?.[id];
+}
+
+/**
+ * Turns a plugin on or off and remembers the choice, like the switch in Community plugins.
+ * Throws EnableError when Obsidian reports that the plugin didn't start.
+ */
 export async function setPluginEnabled(app: App, id: string, enabled: boolean): Promise<void> {
-  if (enabled) await plugins(app).enablePluginAndSave(id);
-  else await plugins(app).disablePluginAndSave(id);
+  const api = plugins(app);
+  if (!enabled) return api.disablePluginAndSave(id);
+  if (!api.manifests[id]) await api.loadManifests();
+  const ok = await api.enablePluginAndSave(id);
+  if (!ok || !isLoaded(app, id)) {
+    // Obsidian may remember the choice even when the start failed; keep the switch truthful.
+    if (api.enabledPlugins.has(id)) await api.disablePluginAndSave(id);
+    throw new EnableError(id);
+  }
 }
 
 /** Disables the plugin and deletes its folder, like Uninstall in Community plugins. */
@@ -36,12 +56,25 @@ export async function uninstallPlugin(app: App, id: string): Promise<void> {
   await api.uninstallPlugin(id);
 }
 
-/** Re-reads manifests and (re)starts the plugin: enables a fresh install, restarts an enabled one. */
-export async function reloadPlugin(app: App, id: string, wasInstalled: boolean): Promise<void> {
+/** Stops a running plugin before its files change; returns whether it was running. */
+export async function stopPlugin(app: App, id: string): Promise<boolean> {
   const api = plugins(app);
-  const wasEnabled = api.enabledPlugins.has(id);
-  if (wasEnabled) await api.disablePlugin(id);
+  const running = api.enabledPlugins.has(id) || isLoaded(app, id);
+  if (running) await api.disablePlugin(id);
+  return running;
+}
+
+/**
+ * Re-reads manifests after the plugin's files changed and starts it:
+ * `restart` brings back a plugin that was running, `enable` turns on a fresh install and remembers it.
+ * Returns false if Obsidian couldn't start the plugin.
+ */
+export async function startPlugin(app: App, id: string, how: "restart" | "enable" | "none"): Promise<boolean> {
+  const api = plugins(app);
   await api.loadManifests();
-  if (wasEnabled) await api.enablePlugin(id);
-  else if (!wasInstalled) await api.enablePluginAndSave(id);
+  if (how === "none") return true;
+  const ok = how === "restart" ? await api.enablePlugin(id) : await api.enablePluginAndSave(id);
+  if (ok && isLoaded(app, id)) return true;
+  if (how === "enable" && api.enabledPlugins.has(id)) await api.disablePluginAndSave(id);
+  return false;
 }

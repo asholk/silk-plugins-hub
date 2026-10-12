@@ -1,5 +1,6 @@
-import { Notice } from "obsidian";
+import { Notice, Platform } from "obsidian";
 import { uninstallPlugin } from "../install/communityPlugins";
+import { IncompatibleError } from "../install/Installer";
 import { NotSignedInError } from "../api/HubClient";
 import { t } from "../i18n";
 import type SilkPluginsHub from "../main";
@@ -11,6 +12,8 @@ export class UpdateService {
   private running = false;
   /** Updates found by the last check that are still waiting for the user. */
   pending: PluginUpdate[] = [];
+  /** New plugins from the last apply() that installed but didn't start. */
+  private notStarted = new Set<string>();
 
   constructor(private plugin: SilkPluginsHub) {}
 
@@ -41,7 +44,11 @@ export class UpdateService {
       }
 
       const updates = result.updates.filter(
-        (u) => installer.manages(u.id) && (interactive || u.reason === "revoked" || settings.skipped[u.id] !== u.version),
+        (u) =>
+          installer.manages(u.id) &&
+          // Desktop-only plugins aren't offered on a phone, not even as updates.
+          !(u.desktopOnly && !Platform.isDesktopApp) &&
+          (interactive || u.reason === "revoked" || settings.skipped[u.id] !== u.version),
       );
       this.setPending(updates);
       if (updates.length === 0) {
@@ -74,20 +81,34 @@ export class UpdateService {
     }
   }
 
-  /** Installs updates one by one. Returns the ones that succeeded. */
+  /**
+   * Installs updates one by one through the queue. Returns the ones whose files are in place;
+   * a new plugin that installed but didn't start is reported and still counts as installed.
+   */
   async apply(updates: PluginUpdate[]): Promise<PluginUpdate[]> {
+    const { plugin } = this;
     const applied: PluginUpdate[] = [];
+    this.notStarted.clear();
     for (const update of updates) {
-      const progress = new Notice(t("installing", { name: update.name }), 0);
+      const label = update.installedVersion ? t("updating") : t("installingShort");
       try {
-        await this.plugin.installer.install(update);
+        const result = await plugin.queue.run(update.id, label, async () => {
+          const progress = new Notice(t("installing", { name: update.name }), 0);
+          try {
+            return await plugin.installer.install(update, { enable: plugin.enableAfterInstall });
+          } finally {
+            progress.hide();
+          }
+        });
         applied.push(update);
-        delete this.plugin.settings.skipped[update.id];
+        delete plugin.settings.skipped[update.id];
+        if (!update.installedVersion && plugin.enableAfterInstall && !result.enabled) {
+          this.notStarted.add(update.id);
+          new Notice(t("installedNotStarted", { name: update.name }), 10000);
+        }
       } catch (err) {
-        console.error(`Silk Hub: failed to install ${update.id}`, err);
+        if (!(err instanceof IncompatibleError)) console.error(`Silk Hub: failed to install ${update.id}`, err);
         new Notice(t("installFailed", { name: update.name, error: (err as Error).message }), 10000);
-      } finally {
-        progress.hide();
       }
     }
     await this.plugin.saveSettings();
@@ -110,10 +131,15 @@ export class UpdateService {
       if (!settings.selected.includes(pluginId)) settings.selected.push(pluginId);
       const applied = await this.apply([update]);
       if (applied.length === 0) return false;
+      // A plugin that didn't start was already reported by apply().
+      if (this.notStarted.has(pluginId)) return true;
+      const vars = { name: update.name, version: update.version };
       new Notice(
         update.installedVersion
-          ? t("updatedOne", { name: update.name, version: update.version })
-          : t("installedOne", { name: update.name, version: update.version }),
+          ? t("updatedOne", vars)
+          : this.plugin.enableAfterInstall
+            ? t("installedOne", vars)
+            : t("installedOff", vars),
       );
       return true;
     } catch (err) {
@@ -125,7 +151,7 @@ export class UpdateService {
   /** Removes the plugin from the vault and stops offering it to this vault. */
   async uninstall(pluginId: string, name: string): Promise<void> {
     const { settings } = this.plugin;
-    await uninstallPlugin(this.plugin.app, pluginId);
+    await this.plugin.queue.run(pluginId, t("uninstalling"), () => uninstallPlugin(this.plugin.app, pluginId));
     settings.selected = settings.selected.filter((id) => id !== pluginId);
     delete settings.skipped[pluginId];
     await this.plugin.saveSettings();

@@ -38,6 +38,10 @@ export interface ChangeItem {
 export interface ReleaseInfo {
   version: string;
   minAppVersion: string;
+  /** The plugin runs only in the desktop app. Missing on older servers. */
+  desktopOnly?: boolean;
+  /** Size of main.js in bytes. Missing on older servers. */
+  size?: number;
   publishedAt: string;
   changes: ChangeItem[];
 }
@@ -70,6 +74,7 @@ export interface PluginUpdate {
   installedVersion: string | null;
   version: string;
   minAppVersion: string;
+  desktopOnly?: boolean;
   reason: "install" | "update" | "revoked";
   changelog: ReleaseInfo[];
   assets: UpdateAsset[];
