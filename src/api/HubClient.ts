@@ -22,6 +22,26 @@ interface TokenResponse {
   expiresIn: number;
 }
 
+/** Why a server address can't be used: empty, not an http(s) URL, no answer, an error, or not a Silk Hub. */
+export type ServerProblem = "empty" | "invalid" | "unreachable" | "down" | "not-hub";
+
+export type ServerCheck =
+  | { ok: true; url: string }
+  | { ok: false; reason: ServerProblem; url: string; status?: number; message?: string };
+
+/** The problem with the shape of a server address, or null when it looks like a full http(s) URL. */
+export function serverUrlError(url: string): ServerProblem | null {
+  if (!url) return "empty";
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "invalid";
+  }
+  if ((parsed.protocol !== "https:" && parsed.protocol !== "http:") || !parsed.hostname) return "invalid";
+  return null;
+}
+
 /** Talks to the Silk Hub server. The refresh token lives in Obsidian's SecretStorage, the access token only in memory. */
 export class HubClient {
   private accessToken: string | null = null;
@@ -44,6 +64,32 @@ export class HubClient {
 
   get signedIn(): boolean {
     return !!this.app.secretStorage.getSecret(REFRESH_SECRET);
+  }
+
+  /**
+   * Whether the address in the settings is a Silk Hub server: a full http(s) URL whose root answers
+   * `{ "service": "Silk Hub" }`. Checked before sign-in, so a typo shows up here and not as a browser error page.
+   */
+  async checkServer(): Promise<ServerCheck> {
+    const url = this.serverUrl;
+    const error = serverUrlError(url);
+    if (error) return { ok: false, reason: error, url };
+    try {
+      const res = await requestUrl({ url: `${url}/`, method: "GET", throw: false });
+      if (res.status >= 500) return { ok: false, reason: "down", url, status: res.status };
+      let body: unknown = null;
+      try {
+        body = res.json;
+      } catch {
+        body = null;
+      }
+      if (res.status !== 200 || (body as { service?: unknown } | null)?.service !== "Silk Hub") {
+        return { ok: false, reason: "not-hub", url, status: res.status };
+      }
+      return { ok: true, url };
+    } catch (e) {
+      return { ok: false, reason: "unreachable", url, message: (e as Error)?.message };
+    }
   }
 
   authStartUrl(state: string, challenge: string): string {

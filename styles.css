@@ -413,3 +413,15 @@
     animation: none;
   }
 }
+
+/* Status bar: plugin updates are available — the counter is green. */
+.status-bar-item.silk-hub-status.has-updates {
+  color: var(--color-green);
+  background-color: rgba(var(--color-green-rgb), 0.15);
+  border-radius: var(--radius-s);
+  font-weight: var(--font-semibold);
+}
+
+.status-bar-item.silk-hub-status.has-updates:hover {
+  background-color: rgba(var(--color-green-rgb), 0.25);
+}

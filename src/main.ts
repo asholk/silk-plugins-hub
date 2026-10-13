@@ -1,5 +1,5 @@
-import { Notice, Plugin, SuggestModal } from "obsidian";
-import { HubClient } from "./api/HubClient";
+import { Notice, Platform, Plugin, SuggestModal } from "obsidian";
+import { HubClient, ServerCheck } from "./api/HubClient";
 import { createPendingSignIn, PendingSignIn } from "./api/pkce";
 import { devLog } from "./devLog";
 import { t } from "./i18n";
@@ -11,6 +11,39 @@ import { HubSettingTab } from "./ui/SettingTab";
 import { UpdateService } from "./updates/UpdateService";
 
 const SIGN_IN_TTL_MS = 10 * 60 * 1000;
+/** A server that answered as Silk Hub is not asked again for this long. */
+const SERVER_CHECK_TTL_MS = 5 * 60 * 1000;
+
+/** Opens a URL in the default browser of the desktop (Electron shell); false where that is not available. */
+function openInSystemBrowser(url: string): boolean {
+  if (!Platform.isDesktopApp) return false;
+  try {
+    const electron = (window as unknown as { require?: (m: string) => unknown }).require?.("electron") as
+      | { shell?: { openExternal?: (u: string) => Promise<void> } }
+      | undefined;
+    if (typeof electron?.shell?.openExternal !== "function") return false;
+    void electron.shell.openExternal(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** What to tell the user about a server address that failed the check. */
+function serverProblemText(check: Extract<ServerCheck, { ok: false }>): string {
+  switch (check.reason) {
+    case "empty":
+      return t("noServer");
+    case "invalid":
+      return t("serverInvalid", { url: check.url });
+    case "unreachable":
+      return t("serverUnreachable", { url: check.url });
+    case "down":
+      return t("serverDown", { url: check.url, status: String(check.status ?? "") });
+    case "not-hub":
+      return t("serverNotHub", { url: check.url });
+  }
+}
 const STARTUP_DELAY_MS = 10 * 1000;
 /** Per-device choice, kept out of data.json so a synced vault doesn't carry it to other devices. */
 const ENABLE_AFTER_INSTALL_KEY = "silk-hub-enable-after-install";
@@ -108,6 +141,7 @@ export default class SilkPluginsHub extends Plugin {
   updateStatusBar(count: number): void {
     if (!this.statusBarEl) return;
     this.statusBarEl.toggle(count > 0);
+    this.statusBarEl.toggleClass("has-updates", count > 0);
     this.statusBarEl.setText(`⬆ ${count}`);
     this.statusBarEl.setAttribute("aria-label", t("updatesAvailable", { n: count }));
   }
@@ -120,6 +154,8 @@ export default class SilkPluginsHub extends Plugin {
   async prepareSignIn(): Promise<string | null> {
     const serverUrl = this.client.serverUrl;
     if (!serverUrl) return null;
+    // Only a checked Silk Hub address gets a sign-in link.
+    if (!(await this.checkServer(false)).ok) return null;
     const pending = this.pendingSignIn;
     if (!pending || pending.serverUrl !== serverUrl || Date.now() - pending.startedAt > SIGN_IN_TTL_MS) {
       this.pendingSignIn = { ...(await createPendingSignIn()), serverUrl };
@@ -128,16 +164,38 @@ export default class SilkPluginsHub extends Plugin {
     return this.client.authStartUrl(state, challenge);
   }
 
-  /** Opens a link from prepareSignIn() in the browser. Call it synchronously from the tap handler. */
+  /**
+   * Opens a link from prepareSignIn() in the default browser. On the desktop through Electron's
+   * shell.openExternal: window.open may land in Obsidian's own Web viewer tab, and the sign-in must
+   * happen in the real browser, where the Google session is (Relay does the same). Elsewhere
+   * window.open — call it synchronously from the tap handler.
+   */
   openSignIn(url: string): void {
     if (this.pendingSignIn) this.pendingSignIn.startedAt = Date.now();
-    window.open(url, "_blank");
+    if (!openInSystemBrowser(url)) window.open(url, "_blank");
     new Notice(t("signInOpened"));
   }
 
+  /** Last successful server check: the address it was for and when. */
+  private serverOk: { url: string; at: number } | null = null;
+
+  /** Checks the server address of the settings; `notify` says what is wrong with it. Successes are kept for a while. */
+  async checkServer(notify: boolean): Promise<ServerCheck> {
+    const url = this.client.serverUrl;
+    if (this.serverOk && this.serverOk.url === url && Date.now() - this.serverOk.at < SERVER_CHECK_TTL_MS) return { ok: true, url };
+    const result = await this.client.checkServer();
+    this.serverOk = result.ok ? { url, at: Date.now() } : null;
+    if (!result.ok && notify) new Notice(serverProblemText(result), 8000);
+    return result;
+  }
+
+  /** "Sign in with Google" when no checked link was ready: checks the server first, then opens the browser. */
   async startSignIn(): Promise<void> {
+    if (!(await this.checkServer(true)).ok) return;
     const url = await this.prepareSignIn();
-    if (!url) return void new Notice(t("noServer"));
+    if (!url) return;
+    // iOS opens the browser only from the tap itself: the link is ready now, the next tap opens it.
+    if (Platform.isIosApp) return void new Notice(t("signInTapAgain"));
     this.openSignIn(url);
   }
 

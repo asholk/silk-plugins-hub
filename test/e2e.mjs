@@ -87,6 +87,20 @@ const pluginDir = path.join(vault, ".obsidian/plugins/hub-test-plugin");
 const installedVersion = () => JSON.parse(fs.readFileSync(path.join(pluginDir, "manifest.json"), "utf8")).version;
 
 try {
+  step("Перед входом проверяется адрес сервера");
+  for (const [address, expected] of [
+    ["hub.example", "не адрес сервера"],
+    [`${base}/nope`, "не сервер Silk Hub"],
+    ["http://127.0.0.1:9", "не отвечает"],
+  ]) {
+    hub.settings.serverUrl = address;
+    await hub.startSignIn();
+    assert.equal(opened.length, 0, `браузер не открыт для ${address}`);
+    assert.ok(lastNotice()?.includes(expected), `${address}: ${lastNotice()}`);
+    ok(`${address} → ${lastNotice()}`);
+  }
+  hub.settings.serverUrl = base;
+
   step("Вход через браузер (dev-вход вместо Google) и возврат по obsidian://");
   await hub.startSignIn();
   assert.equal(opened.length, 1);
@@ -158,6 +172,7 @@ try {
   assert.equal(installedVersion(), "1.0.0");
   assert.match(lastNotice(), /Доступны обновления плагинов: 1/);
   assert.equal(hub.statusBar.text, "⬆ 1");
+  assert.ok(hub.statusBar.classes.has("has-updates"), "the update counter is green");
   ok(`${lastNotice()} | строка состояния: ${hub.statusBar.text}`);
 
   step("Пропустить версию");

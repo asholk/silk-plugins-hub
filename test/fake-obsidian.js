@@ -38,6 +38,7 @@ function fakeEl() {
     visible: true,
     listeners: {},
     addClass: (...c) => c.forEach((x) => el.classes.add(x)),
+    toggleClass: (c, on) => (on ? el.classes.add(c) : el.classes.delete(c)),
     toggle: (v) => (el.visible = v),
     setText: (t) => (el.text = t),
     setAttribute: () => {},

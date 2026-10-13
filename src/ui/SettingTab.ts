@@ -96,13 +96,22 @@ export class HubSettingTab extends PluginSettingTab {
     if (!client.signedIn) return items;
 
     const { data } = this;
+    // "Check again": asks the server anew — the administrator may have just added this account or fixed the server.
+    const checkAgain = (s: Setting): void => {
+      s.addButton((b) => b.setButtonText(t("checkAgain")).onClick(() => this.refresh()));
+    };
     if (data.state !== "ready") {
-      const message = data.state === "loading" ? t("loading") : t("loadFailed", { error: data.message });
-      items.push({ name: message, searchable: false });
+      if (data.state === "loading") items.push({ name: t("loading"), searchable: false });
+      else items.push({ name: t("loadFailed", { error: data.message }), searchable: false, render: checkAgain });
       return items;
     }
     if (data.companies.length === 0) {
-      items.push({ name: t("noCompanies", { email: settings.accountEmail ?? "" }), searchable: false });
+      items.push({
+        name: t("noCompanies", { email: settings.accountEmail ?? "" }),
+        desc: t("noCompaniesCheck"),
+        searchable: false,
+        render: checkAgain,
+      });
       return items;
     }
 
