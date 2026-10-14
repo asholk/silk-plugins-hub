@@ -63,6 +63,8 @@ export class Component {
   unload() {}
 }
 export const MarkdownRenderer = { render: async () => {} };
+export const prepareSimpleSearch = (query) => (text) => (text.toLowerCase().includes(query.toLowerCase()) ? { score: 0, matches: [] } : null);
+export class SearchComponent {}
 export class PluginSettingTab {
   constructor(app, plugin) {
     this.app = app;

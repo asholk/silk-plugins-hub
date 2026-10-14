@@ -128,6 +128,11 @@ const en = {
   whatsNew: "What's new in {version}",
   openGuide: "Open instructions",
   contents: "Contents",
+  guideSearch: "Search sections",
+  nothingFound: "Nothing found",
+  guideIntro: "Introduction",
+  guideVersion: "Instructions for version {version}",
+  guideVersionDiffers: "You have version {version} installed, so some of this may differ.",
   searchPlugins: "Search plugins",
   loading: "Loading…",
 };
@@ -260,6 +265,11 @@ const ru: typeof en = {
   whatsNew: "Что нового в {version}",
   openGuide: "Открыть инструкцию",
   contents: "Содержание",
+  guideSearch: "Поиск по разделам",
+  nothingFound: "Ничего не найдено",
+  guideIntro: "Введение",
+  guideVersion: "Инструкция к версии {version}",
+  guideVersionDiffers: "У вас установлена версия {version} — часть описанного может отличаться.",
   searchPlugins: "Поиск плагинов",
   loading: "Загрузка…",
 };

@@ -257,6 +257,22 @@
   min-height: 0;
 }
 
+.silk-hub-guide-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-1) var(--size-4-3);
+  font-size: var(--font-ui-smaller);
+  margin-bottom: var(--size-4-2);
+}
+
+.silk-hub-guide-meta:empty {
+  display: none;
+}
+
+.silk-hub-guide-version-warning {
+  color: var(--text-warning);
+}
+
 .silk-hub-guide-layout {
   display: flex;
   gap: var(--size-4-4);
@@ -264,11 +280,29 @@
   min-height: 0;
 }
 
+/* Table of contents */
 .silk-hub-guide-toc {
-  flex: 0 0 220px;
-  overflow-y: auto;
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border-right: 1px solid var(--background-modifier-border);
   padding-right: var(--size-4-3);
+}
+
+.silk-hub-guide-toc-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.silk-hub-guide-search {
+  margin-bottom: var(--size-4-3);
+}
+
+.silk-hub-guide-search .search-input-container {
+  width: 100%;
 }
 
 .silk-hub-guide-toc-title {
@@ -279,12 +313,28 @@
   margin-bottom: var(--size-4-2);
 }
 
+.silk-hub-guide-toc-list {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
 .silk-hub-guide-toc-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-4-2);
   cursor: pointer;
   padding: var(--size-2-2) var(--size-4-2);
   border-radius: var(--radius-s);
   color: var(--text-muted);
   font-size: var(--font-ui-small);
+}
+
+.silk-hub-guide-toc-num {
+  flex: 0 0 auto;
+  min-width: 1.5em;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .silk-hub-guide-toc-item:hover {
@@ -297,23 +347,238 @@
   color: var(--text-normal);
 }
 
+.silk-hub-guide-toc-item.is-active .silk-hub-guide-toc-num {
+  color: var(--text-accent);
+}
+
+.silk-hub-guide-toc-item:focus-visible,
+.silk-hub-guide-toc-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+}
+
+.silk-hub-guide-toc-toggle {
+  display: none;
+}
+
+/* Body: one card per section */
 .silk-hub-guide-body {
+  position: relative;
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   padding-right: var(--size-4-2);
 }
 
-@media (max-width: 700px) {
-  .silk-hub-guide-layout {
-    flex-direction: column;
-  }
+.silk-hub-guide-section {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-3) var(--size-4-4);
+  margin-bottom: var(--size-4-4);
+}
 
-  .silk-hub-guide-toc {
-    flex: none;
-    border-right: none;
-    border-bottom: 1px solid var(--background-modifier-border);
-    padding: 0 0 var(--size-4-2);
-  }
+.silk-hub-guide-section.mod-intro {
+  background: transparent;
+  border-style: dashed;
+}
+
+.silk-hub-guide-section > :first-child,
+.silk-hub-guide-section > :first-child > :first-child {
+  margin-top: 0;
+}
+
+.silk-hub-guide-section > :last-child,
+.silk-hub-guide-section > :last-child > :last-child {
+  margin-bottom: 0;
+}
+
+.silk-hub-guide-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-3);
+}
+
+.silk-hub-guide-num {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8em;
+  height: 1.8em;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 0.75em;
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numbered steps: plates with the step number in a circle */
+.silk-hub-guide-body ol.silk-hub-guide-steps {
+  list-style: none;
+  padding-left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.silk-hub-guide-steps > li {
+  position: relative;
+  margin: 0;
+  padding: var(--size-4-2) var(--size-4-3) var(--size-4-2) calc(var(--size-4-3) + 2.2em);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+}
+
+.silk-hub-guide-steps > li::before {
+  content: counter(list-item);
+  position: absolute;
+  left: var(--size-4-2);
+  top: var(--size-4-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  border: 1px solid var(--interactive-accent);
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+}
+
+.silk-hub-guide-steps > li::marker {
+  content: none;
+}
+
+.silk-hub-guide-steps > li > .list-bullet,
+.silk-hub-guide-steps > li > .list-collapse-indicator {
+  display: none;
+}
+
+.silk-hub-guide-ref {
+  cursor: pointer;
+}
+
+/* Images */
+.silk-hub-guide-figure {
+  display: block;
+  margin: var(--size-4-3) auto;
+  text-align: center;
+}
+
+.silk-hub-card .silk-hub-guide-figure img {
+  display: block;
+  margin: 0 auto;
+  max-width: min(100%, 640px);
+  cursor: zoom-in;
+}
+
+.silk-hub-guide-figure figcaption {
+  margin-top: var(--size-4-1);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.silk-hub-guide-empty {
+  padding: var(--size-4-4) 0;
+  text-align: center;
+}
+
+.silk-hub-image-modal {
+  width: auto;
+  max-width: 96vw;
+  max-height: 94vh;
+}
+
+.silk-hub-image-modal .modal-content {
+  display: flex;
+  justify-content: center;
+  cursor: zoom-out;
+}
+
+.silk-hub-image-modal img {
+  max-width: 100%;
+  max-height: calc(94vh - var(--size-4-12));
+  object-fit: contain;
+  border-radius: var(--radius-s);
+}
+
+/* Narrow windows and phones: the table of contents folds into a "Contents" button */
+.silk-hub-guide-modal.is-compact .silk-hub-guide-layout {
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.silk-hub-guide-modal.is-compact .silk-hub-guide-toc {
+  flex: none;
+  position: relative;
+  border-right: none;
+  padding: 0;
+}
+
+.silk-hub-guide-modal.is-compact .silk-hub-guide-toc-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  cursor: pointer;
+  padding: var(--size-4-2) var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  font-size: var(--font-ui-small);
+}
+
+.silk-hub-guide-toc-toggle-icon,
+.silk-hub-guide-toc-chevron {
+  display: flex;
+  color: var(--text-muted);
+}
+
+.silk-hub-guide-toc-current {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.silk-hub-guide-toc.is-open .silk-hub-guide-toc-chevron {
+  transform: rotate(180deg);
+}
+
+.silk-hub-guide-modal.is-compact .silk-hub-guide-toc-title {
+  display: none;
+}
+
+.silk-hub-guide-modal.is-compact .silk-hub-guide-toc-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + var(--size-4-1));
+  left: 0;
+  right: 0;
+  z-index: 1;
+  max-height: 55vh;
+  padding: var(--size-4-2);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+}
+
+.silk-hub-guide-modal.is-compact .silk-hub-guide-toc.is-open .silk-hub-guide-toc-panel {
+  display: flex;
+}
+
+.silk-hub-guide-modal.is-compact .silk-hub-guide-body {
+  padding-right: 0;
+}
+
+.silk-hub-guide-modal.is-compact .silk-hub-guide-section {
+  padding: var(--size-4-2) var(--size-4-3);
 }
 
 /* Nothing in the Silk Hub settings may widen the page: on phones it would scroll sideways. */

@@ -3,7 +3,7 @@ import { t } from "../i18n";
 import type SilkPluginsHub from "../main";
 import type { CatalogPlugin } from "../settings";
 import { formatDate, renderChangesTable } from "./changes";
-import { GuideModal } from "./GuideModal";
+import { GuideModal, guideLinkSection } from "./GuideModal";
 
 /**
  * "Details": the plugin page — what it is, its status and versions, what's new in the latest version
@@ -46,6 +46,20 @@ export class PluginInfoModal extends Modal {
 
     if (p.hasCard) {
       const about = contentEl.createDiv({ cls: "silk-hub-info-section silk-hub-card markdown-rendered" });
+      // Links like [more](guide.md#5) open the guide on that section instead of a missing note.
+      about.addEventListener(
+        "click",
+        (e) => {
+          const link = (e.target as HTMLElement | null)?.closest?.("a");
+          const section = link && p.hasGuide ? guideLinkSection(link) : null;
+          if (section === null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          this.close();
+          new GuideModal(this.plugin, p, section || undefined).open();
+        },
+        { capture: true },
+      );
       try {
         const card = await this.plugin.client.doc(p.id, "card");
         await MarkdownRenderer.render(this.app, card.markdown, about, "", this.component);
